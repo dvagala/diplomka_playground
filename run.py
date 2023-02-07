@@ -96,16 +96,22 @@ def draw_rectangle(mask, point):
 
 
 canny_min_thresh_slider_ax  = fig.add_axes([0.25, 0.25, 0.65, 0.03])
-canny_min_thresh_slider = Slider(canny_min_thresh_slider_ax, 'Min thresh', 0.1, 500.0, valinit=canny_min_thresh)
+canny_min_thresh_slider = Slider(canny_min_thresh_slider_ax, 'Min thresh', 0.1, 300.0, valinit=canny_min_thresh)
 
 canny_max_thresh_slider_ax = fig.add_axes([0.25, 0.2, 0.65, 0.03])
-canny_max_thresh_slider = Slider(canny_max_thresh_slider_ax, 'Max thresh', 0.1, 500.0, valinit=canny_max_thresh)
+canny_max_thresh_slider = Slider(canny_max_thresh_slider_ax, 'Max thresh', 0.1, 300.0, valinit=canny_max_thresh)
 
 sobel_thresh_slider_ax  = fig.add_axes([0.25, 0.15, 0.65, 0.03])
-sobel_thresh_slider = Slider(sobel_thresh_slider_ax, 'Sobel thresh', 0.1, 500.0, valinit=sobel_thresh)
+sobel_thresh_slider = Slider(sobel_thresh_slider_ax, 'Sobel thresh', 0.1, 300.0, valinit=sobel_thresh)
 
 misc_slider_ax  = fig.add_axes([0.25, 0.1, 0.65, 0.03])
-misc_slider = Slider(misc_slider_ax, 'misc slider', 0, 20, valinit=1)
+misc_slider = Slider(misc_slider_ax, 'misc slider', 0, 50, valinit=1)
+
+b_slider_ax  = fig.add_axes([0.25, 0.05, 0.65, 0.03])
+b_slider = Slider(b_slider_ax, 'B', 0, 2000, valinit=10)
+
+c_slider_ax  = fig.add_axes([0.25, 0.0, 0.65, 0.03])
+c_slider = Slider(c_slider_ax, 'C', 0, 20, valinit=4)
 
 # Define an action for modifying the line when any slider's value changes
 def sliders_on_changed(val):
@@ -115,13 +121,6 @@ def sliders_on_changed(val):
 
 
 all_segments_mask = np.zeros((H,W,3), np.uint8)
-
-# def flood_fill_all_areas():
-#     for touch_point in touch_points:
-#         print('tuoch point', touch_point[0], touch_point[1])
-#         if edges[touch_point[1], touch_point[0]] != 255:
-#             cv2.floodFill(edges, mask, seedPoint=touch_point, newVal=(255,0,0), loDiff=(1,)*3, upDiff=(1,)*3, flags=floodflags)
-#         draw_rectangle(mask, touch_point)
 
 
 def generate_unique_colors():
@@ -210,55 +209,121 @@ def dillute_segments():
 
         i += 1
 
+def flood_fill_on_touch_points(edges):
+    global all_segments_mask
+    for touch_point in touch_points:
+        if edges[touch_point[1], touch_point[0]] != 255:
+            mask = np.zeros((H+2,W+2),np.uint8)
+            cv2.floodFill(edges, mask, seedPoint=touch_point, newVal=(255,0,0), loDiff=(1,)*3, upDiff=(1,)*3, flags=floodflags)
+            mask = mask[1:1+H, 1:1+W]
+
+            solid_color_image = np.zeros((H,W,3), np.uint8)
+            solid_color_image[:,0:W] = all_possible_colors[touch_point[0]+touch_point[1]]
+            new_colored_segment = cv2.bitwise_or(solid_color_image, solid_color_image, mask=mask)
+            all_segments_mask = cv2.bitwise_or(new_colored_segment, all_segments_mask)
+
+
+def superpixel():
+    converted_img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+
+
+    height,width,channels = converted_img.shape
+    num_iterations = 6
+    prior = 2
+    double_step = False
+    num_superpixels = int(b_slider.val)
+    num_levels = int(c_slider.val)
+    num_histogram_bins = int(misc_slider.val)
+
+
+    seeds = cv2.ximgproc.createSuperpixelSEEDS(width, height, channels, num_superpixels, num_levels, prior, num_histogram_bins)
+    color_img = np.zeros((height,width,3), np.uint8)
+    color_img[:] = (0, 0, 255)
+    seeds.iterate(converted_img, num_iterations)
+
+    # retrieve the segmentation result
+    labels = seeds.getLabels()
+
+
+    # labels output: use the last x bits to determine the color
+    num_label_bits = 2
+    labels &= (1<<num_label_bits)-1
+    labels *= 1<<(16-num_label_bits)
+
+    mask = seeds.getLabelContourMask(False)
+
+    # stitch foreground & background together
+    mask_inv = cv2.bitwise_not(mask)
+    result_bg = cv2.bitwise_and(img, img, mask=mask_inv)
+    result_fg = cv2.bitwise_and(color_img, color_img, mask=mask)
+    return  cv2.add(result_bg, result_fg)
+
+
 
 def render():
-    global all_segments_mask
+    global all_segments_mask, img
+
+    all_segments_mask = np.zeros((H,W,3), np.uint8)
+
 
     # edges = dilate(canny(canny_min_thresh_slider.val, canny_max_thresh_slider.val), misc_slider.val)
     edges = dilate(sobel(img, sobel_thresh_slider.val), misc_slider.val)
     # edges = sobel(edges, canny_min_thresh_slider.val, depth=cv2.CV_8U)
-    # mask = np.zeros((H+2,W+2),np.uint8)
+
+    # flood_fill_on_touch_points(edges)
+
+    sup = superpixel()
+
+
+
 
     painted_areas = 0
 
-    # for touch_point in touch_points:
-    for y in range(H):
-        for x in range(W):
-            # print(f'processing pixel: ({x},{y})')
-            # print(f'all_segments_mask[y,x]: {all_segments_mask[y,x]}')
-            if edges[y, x] != 255 and is_black(all_segments_mask[y,x]):
-                mask = np.zeros((H+2,W+2), np.uint8)
-                cv2.floodFill(edges, mask, seedPoint=(x,y), newVal=(255,0,0), loDiff=(1,)*3, upDiff=(1,)*3, flags=floodflags)
-                mask = mask[1:1+H, 1:1+W]
-                # print(f'W: {W}')
-                # print(f'H: {H}')
-                # print(f'mask.shape: {mask.shape}')
+    # # for touch_point in touch_points:
+    # for y in range(H):
+    #     for x in range(W):
+    #         # print(f'processing pixel: ({x},{y})')
+    #         # print(f'all_segments_mask[y,x]: {all_segments_mask[y,x]}')
+    #         if edges[y, x] != 255 and is_black(all_segments_mask[y,x]):
+    #             mask = np.zeros((H+2,W+2), np.uint8)
+    #             cv2.floodFill(edges, mask, seedPoint=(x,y), newVal=(255,0,0), loDiff=(1,)*3, upDiff=(1,)*3, flags=floodflags)
+    #             mask = mask[1:1+H, 1:1+W]
+    #             # print(f'W: {W}')
+    #             # print(f'H: {H}')
+    #             # print(f'mask.shape: {mask.shape}')
 
-                solid_color_image = np.zeros((H,W,3), np.uint8)
-                solid_color_image[:,0:W] = all_possible_colors.pop()
+    #             solid_color_image = np.zeros((H,W,3), np.uint8)
+    #             solid_color_image[:,0:W] = all_possible_colors.pop()
 
-                # get first masked value (foreground)
-                new_colored_segment = cv2.bitwise_or(solid_color_image, solid_color_image, mask=mask)
-                all_segments_mask = cv2.bitwise_or(new_colored_segment, all_segments_mask)
-                painted_areas += 1
+    #             # get first masked value (foreground)
+    #             new_colored_segment = cv2.bitwise_or(solid_color_image, solid_color_image, mask=mask)
+    #             all_segments_mask = cv2.bitwise_or(new_colored_segment, all_segments_mask)
+    #             painted_areas += 1
 
-    dillute_segments()
+    # # dillute_segments()
 
-    print(f'painted areas: {painted_areas}')
-    print(f'W*H: {W*H}')
+    # print(f'painted areas: {painted_areas}')
+    # print(f'W*H: {W*H}')
 
-    cv2.imshow("sobel", edges)
+
+    # cv2.imshow("sobel", edges)
     # cv2.imshow("flood fill", mask)
-    cv2.imshow("all_segments_mask", all_segments_mask)
-    cv2.imshow("all_segments_mask edges", sobel(all_segments_mask, 1))
+    # cv2.imshow("all_segments_mask", all_segments_mask)
+    
+    cv2.imshow("superpixel", sup)
 
-    cv2.imwrite('all_segments_mask.png', all_segments_mask)
+
+    # cv2.imshow("all_segments_mask edges", sobel(all_segments_mask, 1))
+
+    # cv2.imwrite('all_segments_mask.png', all_segments_mask)
 
     fig.canvas.draw_idle()
 canny_min_thresh_slider.on_changed(sliders_on_changed)
 canny_max_thresh_slider.on_changed(sliders_on_changed)
 sobel_thresh_slider.on_changed(sliders_on_changed)
 misc_slider.on_changed(sliders_on_changed)
+b_slider.on_changed(sliders_on_changed)
+c_slider.on_changed(sliders_on_changed)
 
 # Add a button for resetting the parameters
 reset_button_ax = fig.add_axes([0.8, 0.025, 0.1, 0.04])
@@ -300,3 +365,27 @@ cv2.setMouseCallback('sobel', on_mouse)
 plt.show()
 
 
+
+def apply_brightness_contrast(input_img, brightness = 0, contrast = 0):
+    if brightness != 0:
+        if brightness > 0:
+            shadow = brightness
+            highlight = 255
+        else:
+            shadow = 0
+            highlight = 255 + brightness
+        alpha_b = (highlight - shadow)/255
+        gamma_b = shadow
+        
+        buf = cv2.addWeighted(input_img, alpha_b, input_img, 0, gamma_b)
+    else:
+        buf = input_img.copy()
+    
+    if contrast != 0:
+        f = 131*(contrast + 127)/(127*(131-contrast))
+        alpha_c = f
+        gamma_c = 127*(1-f)
+        
+        buf = cv2.addWeighted(buf, alpha_c, buf, 0, gamma_c)
+
+    return buf
