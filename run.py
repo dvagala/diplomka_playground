@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider, Button, RadioButtons
 import random
 
+from lib import *
+
 
 img = cv2.imread("photo.jpg")
 # img = cv2.GaussianBlur(img, (3,3), 0) 
@@ -105,13 +107,13 @@ sobel_thresh_slider_ax  = fig.add_axes([0.25, 0.15, 0.65, 0.03])
 sobel_thresh_slider = Slider(sobel_thresh_slider_ax, 'Sobel thresh', 0.1, 300.0, valinit=sobel_thresh)
 
 misc_slider_ax  = fig.add_axes([0.25, 0.1, 0.65, 0.03])
-misc_slider = Slider(misc_slider_ax, 'misc slider', 0, 50, valinit=1)
+misc_slider = Slider(misc_slider_ax, 'misc slider', 0, 300, valinit=80)
 
 b_slider_ax  = fig.add_axes([0.25, 0.05, 0.65, 0.03])
-b_slider = Slider(b_slider_ax, 'B', 0, 2000, valinit=10)
+b_slider = Slider(b_slider_ax, 'B', 0, 50, valinit=1)
 
 c_slider_ax  = fig.add_axes([0.25, 0.0, 0.65, 0.03])
-c_slider = Slider(c_slider_ax, 'C', 0, 1, valinit=0.075)
+c_slider = Slider(c_slider_ax, 'C', 0, 500, valinit=180)
 
 # Define an action for modifying the line when any slider's value changes
 def sliders_on_changed(val):
@@ -156,7 +158,6 @@ def dillute_to_neighbour_if_empty(neighbour_x, neighbour_y, current_pixel, col):
         return True
     else:
         return False
-
 
 
 def dillute_segments():
@@ -223,59 +224,21 @@ def flood_fill_on_touch_points(edges):
             all_segments_mask = cv2.bitwise_or(new_colored_segment, all_segments_mask)
 
 
-def superpixel():
-    converted_img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-
-
-    height,width,channels = converted_img.shape
-    num_iterations = 6
-    prior = 2
-    double_step = False
-    num_superpixels = int(b_slider.val)
-    num_levels = int(c_slider.val)
-    num_histogram_bins = int(misc_slider.val)
-
-
-    # seeds = cv2.ximgproc.createSuperpixelSEEDS(width, height, channels, num_superpixels, num_levels, prior, num_histogram_bins)
-    seeds = cv2.ximgproc.createSuperpixelLSC(converted_img, int(b_slider.val), c_slider.val )
-    color_img = np.zeros((height,width,3), np.uint8)
-    color_img[:] = (0, 0, 255)
-    seeds.iterate(num_iterations)
-
-    # retrieve the segmentation result
-    labels = seeds.getLabels()
-
-
-    # labels output: use the last x bits to determine the color
-    num_label_bits = 2
-    labels &= (1<<num_label_bits)-1
-    labels *= 1<<(16-num_label_bits)
-
-    mask = seeds.getLabelContourMask(False)
-
-    # stitch foreground & background together
-    mask_inv = cv2.bitwise_not(mask)
-    result_bg = cv2.bitwise_and(img, img, mask=mask_inv)
-    result_fg = cv2.bitwise_and(color_img, color_img, mask=mask)
-    return  cv2.add(result_bg, result_fg)
-
-
-
 def render():
+    print('rendering...')
     global all_segments_mask, img
 
     all_segments_mask = np.zeros((H,W,3), np.uint8)
 
 
     # edges = dilate(canny(canny_min_thresh_slider.val, canny_max_thresh_slider.val), misc_slider.val)
-    edges = dilate(sobel(img, sobel_thresh_slider.val), misc_slider.val)
+    # edges = dilate(sobel(img, sobel_thresh_slider.val), misc_slider.val)
     # edges = sobel(edges, canny_min_thresh_slider.val, depth=cv2.CV_8U)
 
     # flood_fill_on_touch_points(edges)
 
-    sup = superpixel()
 
-
+    hough_lines(img, canny_min_thresh_slider.val, canny_max_thresh_slider.val, misc_slider.val, b_slider.val, c_slider.val, maxLineGap=sobel_thresh_slider.val )
 
 
     painted_areas = 0
@@ -311,7 +274,6 @@ def render():
     # cv2.imshow("flood fill", mask)
     # cv2.imshow("all_segments_mask", all_segments_mask)
     
-    cv2.imshow("superpixel", sup)
 
 
     # cv2.imshow("all_segments_mask edges", sobel(all_segments_mask, 1))
@@ -319,6 +281,9 @@ def render():
     # cv2.imwrite('all_segments_mask.png', all_segments_mask)
 
     fig.canvas.draw_idle()
+    print('finish render')
+
+
 canny_min_thresh_slider.on_changed(sliders_on_changed)
 canny_max_thresh_slider.on_changed(sliders_on_changed)
 sobel_thresh_slider.on_changed(sliders_on_changed)
