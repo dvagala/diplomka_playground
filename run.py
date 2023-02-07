@@ -5,6 +5,8 @@ from numpy import pi, sin
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider, Button, RadioButtons
+import random
+
 
 img = cv2.imread("photo.jpg")
 # img = cv2.GaussianBlur(img, (3,3), 0) 
@@ -121,26 +123,19 @@ all_segments_mask = np.zeros((H,W,3), np.uint8)
 #             cv2.floodFill(edges, mask, seedPoint=touch_point, newVal=(255,0,0), loDiff=(1,)*3, upDiff=(1,)*3, flags=floodflags)
 #         draw_rectangle(mask, touch_point)
 
-last_used_color = (0,0,80)
 
-def get_next_color():
-    global last_used_color
+def generate_unique_colors():
+    colors = []
+    for i in range(int((W*H)*2)):
+        r = random.randint(20,245)
+        g = random.randint(20,245)
+        b = random.randint(20,245)
+        colors.append([r,g,b])
+    return  list(set(tuple(sorted(sub)) for sub in colors))
 
-    step = 5
-    max_value = 255 - step
+all_possible_colors = generate_unique_colors()
 
-    if last_used_color[0] <= max_value:
-        last_used_color = (last_used_color[0]+step, last_used_color[1], last_used_color[2])
-    else:
-        if last_used_color[1] <= max_value:
-            last_used_color = (last_used_color[0], last_used_color[1]+step, last_used_color[2])
-        else:
-            if last_used_color[2] <= max_value:
-                last_used_color = (last_used_color[0], last_used_color[1], last_used_color[2]+step)
-            else:
-                last_used_color = (0,255,0)
 
-    return last_used_color
 
 
 def is_within_boundaries(x, y, W, H):
@@ -153,11 +148,68 @@ def is_black(rgb_array):
     return not np.any(rgb_array)
 
                 
-def dillute_to_neighbour_if_empty(neighbour_x, neighbour_y, current_pixel):
-    global W, H, all_segments_mask
+def dillute_to_neighbour_if_empty(neighbour_x, neighbour_y, current_pixel, col):
+    global all_segments_mask
     if is_within_boundaries(neighbour_x, neighbour_y, W, H) and is_black(all_segments_mask[neighbour_y, neighbour_x]):
-        # all_segments_mask[neighbour_y, neighbour_x] = current_pixel
-        all_segments_mask[neighbour_y, neighbour_x] = (0, 0, 255)
+        all_segments_mask[neighbour_y, neighbour_x] = current_pixel
+        # all_segments_mask[neighbour_y, neighbour_x] = (0, 0, 255)
+        # all_segments_mask[neighbour_y, neighbour_x] = col
+        return True
+    else:
+        return False
+
+
+
+def dillute_segments():
+    global H, W, all_segments_mask
+
+    i = 0
+    while True:
+        black_count = 0
+        diluted_count = 0
+
+        if i % 2 == 0:
+            print('going from top left')
+            def get_neighbours(x,y):
+                return [
+                    (x-1, y-1),
+                    (x, y-1),
+                    (x+1, y-1),
+                    (x-1, y)
+                ]
+            x_range = list(range(W))
+            y_range = list(range(H))
+            color = (0,0,255)
+        else:
+            print('going from bottom right')
+            def get_neighbours(x,y):
+                return [
+                    (x+1, y),
+                    (x+1, y+1),
+                    (x, y+1),
+                    (x-1, y+1)
+                ]
+            x_range = list(reversed(range(W)))
+            y_range = list(reversed(range(H)))
+            color = (255,0,0)
+
+        for y in y_range:
+            for x in x_range:
+                current_pixel = all_segments_mask[y,x]
+                if is_black(current_pixel):
+                    black_count += 1
+                else:
+                    for neighbour in get_neighbours(x,y):
+                        was_diluted = dillute_to_neighbour_if_empty(neighbour_x=neighbour[0], neighbour_y=neighbour[1], current_pixel=current_pixel, col=color)
+                        if was_diluted == True:
+                            diluted_count += 1
+
+        print(f'iteration: {i}, black_count: {black_count}, diluted_count: {diluted_count}')
+        if black_count == diluted_count:
+            break
+
+        i += 1
+
 
 def render():
     global all_segments_mask
@@ -183,33 +235,14 @@ def render():
                 # print(f'mask.shape: {mask.shape}')
 
                 solid_color_image = np.zeros((H,W,3), np.uint8)
-                solid_color_image[:,0:W] = get_next_color()
+                solid_color_image[:,0:W] = all_possible_colors.pop()
 
                 # get first masked value (foreground)
                 new_colored_segment = cv2.bitwise_or(solid_color_image, solid_color_image, mask=mask)
                 all_segments_mask = cv2.bitwise_or(new_colored_segment, all_segments_mask)
                 painted_areas += 1
 
-    for y in range(H):
-        for x in range(W):
-            current_pixel = all_segments_mask[y,x]
-            if not is_black(current_pixel):
-                neighbours = [
-                    (x-1, y-1),
-                    (x, y-1),
-                    (x+1, y-1),
-                    (x+1, y),
-                    (x+1, y+1),
-                    (x, y+1),
-                    (x-1, y+1),
-                    (x-1, y)
-                ]
-
-                for neighbour in neighbours:
-                    neighbour_x = neighbour[0]
-                    neighbour_y = neighbour[1]
-                    dillute_to_neighbour_if_empty(neighbour_x, neighbour_y, current_pixel),
-                    
+    dillute_segments()
 
     print(f'painted areas: {painted_areas}')
     print(f'W*H: {W*H}')
@@ -217,10 +250,11 @@ def render():
     cv2.imshow("sobel", edges)
     # cv2.imshow("flood fill", mask)
     cv2.imshow("all_segments_mask", all_segments_mask)
+    cv2.imshow("all_segments_mask edges", sobel(all_segments_mask, 1))
+
+    cv2.imwrite('all_segments_mask.png', all_segments_mask)
 
     fig.canvas.draw_idle()
-
-
 canny_min_thresh_slider.on_changed(sliders_on_changed)
 canny_max_thresh_slider.on_changed(sliders_on_changed)
 sobel_thresh_slider.on_changed(sliders_on_changed)
