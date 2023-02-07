@@ -111,7 +111,7 @@ b_slider_ax  = fig.add_axes([0.25, 0.05, 0.65, 0.03])
 b_slider = Slider(b_slider_ax, 'B', 0, 2000, valinit=10)
 
 c_slider_ax  = fig.add_axes([0.25, 0.0, 0.65, 0.03])
-c_slider = Slider(c_slider_ax, 'C', 0, 20, valinit=4)
+c_slider = Slider(c_slider_ax, 'C', 0, 1, valinit=0.075)
 
 # Define an action for modifying the line when any slider's value changes
 def sliders_on_changed(val):
@@ -236,10 +236,11 @@ def superpixel():
     num_histogram_bins = int(misc_slider.val)
 
 
-    seeds = cv2.ximgproc.createSuperpixelSEEDS(width, height, channels, num_superpixels, num_levels, prior, num_histogram_bins)
+    # seeds = cv2.ximgproc.createSuperpixelSEEDS(width, height, channels, num_superpixels, num_levels, prior, num_histogram_bins)
+    seeds = cv2.ximgproc.createSuperpixelLSC(converted_img, int(b_slider.val), c_slider.val )
     color_img = np.zeros((height,width,3), np.uint8)
     color_img[:] = (0, 0, 255)
-    seeds.iterate(converted_img, num_iterations)
+    seeds.iterate(num_iterations)
 
     # retrieve the segmentation result
     labels = seeds.getLabels()
