@@ -17,10 +17,6 @@ img = cv2.imread("photo.jpg")
 (H, W) = img.shape[:2]
 
 
-def binaryThreshold(mask, thresh):
-    # print("calculating thres")
-    ret, thresh = cv2.threshold(mask,thresh,255,cv2.THRESH_BINARY)
-    return thresh
 
 def hed():
     # print("calculating hed")
@@ -33,17 +29,6 @@ def hed():
     # return hed
     return binaryThreshold(hed)
 
-
-def sobel(input, thresh, depth = cv2.CV_64F):
-    # print("calculating sobel")
-    if depth == cv2.CV_64F:
-        input = cv2.cvtColor(input, cv2.COLOR_BGR2GRAY)
-    x = cv2.Sobel(input, ddepth=depth, dx=1,dy=0, ksize=3, scale=1)
-    y = cv2.Sobel(input, ddepth=depth, dx=0,dy=1, ksize=3, scale=1)
-    absx= cv2.convertScaleAbs(x)
-    absy = cv2.convertScaleAbs(y)
-    edge = cv2.addWeighted(absx, 0.5, absy, 0.5,0)
-    return binaryThreshold(edge, thresh)
 
 dilate_shape = cv2.MORPH_ELLIPSE
 
@@ -268,6 +253,7 @@ def render():
 
     # print(f'painted areas: {painted_areas}')
     # print(f'W*H: {W*H}')
+
 
 
     # cv2.imshow("sobel", edges)

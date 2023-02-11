@@ -46,6 +46,7 @@ def superpixel(img,b_slider, c_slider, misc_slider):
 
 
 
+
 def hough_lines(img, min, max, threshold, rho, minLineLenght, maxLineGap):
     # img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     # dst = cv2.Canny(img, min, max, None, 3)
