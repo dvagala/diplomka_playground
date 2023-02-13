@@ -8,6 +8,16 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider, Button, RadioButtons
 import random
 
+def generate_unique_colors(W,H):
+    colors = []
+    for i in range(int((W*H)*2)):
+        r = random.randint(20,245)
+        g = random.randint(20,245)
+        b = random.randint(20,245)
+        colors.append([r,g,b])
+    return  list(set(tuple(sorted(sub)) for sub in colors))
+
+
 def superpixel(img,b_slider, c_slider, misc_slider):
     converted_img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
@@ -88,3 +98,69 @@ def sobel(input, thresh, depth = cv2.CV_64F):
     edge = cv2.addWeighted(absx, 0.5, absy, 0.5,0)
     return binaryThreshold(edge, thresh)
 
+
+def is_black(rgb_array):
+    return not np.any(rgb_array)
+
+def dilate(edges, size):
+    if int(size) <= 0:
+        return edges;
+
+    # dilatation_size = int(size)
+    # dilation_shape = cv2.MORPH_ELLIPSE
+
+    dilate_shape = cv2.MORPH_ELLIPSE
+    element = cv2.getStructuringElement(dilate_shape, (2 * size + 1, 2 * size + 1),
+                                       (size, size))
+    # kernel = cv2.getStructuringElement(dilate_shape, (int(size),int(size)))
+
+    # edges = cv2.morphologyEx(edges, cv2.MORPH_OPEN, kernel)
+
+    # return cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel)
+
+    return cv2.dilate(edges, element)
+
+floodflags = 4
+floodflags |= cv2.FLOODFILL_MASK_ONLY
+floodflags |= (255 << 8)
+
+def fill_sobel_segments(img, sobel_thresh, min_filled_pixels_per_segment, dilate_size, skip_step, all_possible_colors):
+    edges = sobel(img, sobel_thresh)
+
+    H = img.shape[0]
+    W = img.shape[1]
+
+    segments_mask = np.zeros((H,W,3), np.uint8)
+
+    for y in range(0,H, skip_step):
+        for x in range(0,W, skip_step):
+            # print(f'processing pixel: ({x},{y})')
+            # print(f'all_segments_mask[y,x]: {all_segments_mask[y,x]}')
+            if edges[y, x] != 255 and is_black(segments_mask[y,x]):
+                mask = np.zeros((H+2,W+2), np.uint8)
+                cv2.floodFill(edges, mask, seedPoint=(x,y), newVal=(255,0,0), loDiff=(1,)*3, upDiff=(1,)*3, flags=floodflags)
+                mask = mask[1:1+H, 1:1+W]
+                filled_pixels_count = cv2.countNonZero(mask)  
+                if filled_pixels_count < min_filled_pixels_per_segment:
+                    continue
+
+                mask = dilate(mask, int(dilate_size))
+                mask_inv = cv2.bitwise_not(mask)
+
+                solid_color_image = np.zeros((H,W,3), np.uint8)
+                solid_color_image[:,0:W] = all_possible_colors.pop()
+
+                new_colored_segment = cv2.bitwise_or(solid_color_image, solid_color_image, mask=mask)
+                segments_mask = add_non_black_to_image(bg_image=segments_mask, fg_image=new_colored_segment, mask=mask_inv)
+
+    return segments_mask, all_possible_colors
+
+
+
+def add_non_black_to_image(bg_image, fg_image, mask = []):
+    if not np.any(mask):
+        mask = cv2.inRange(fg_image, np.array([0,0,0]), np.array([0,0,0]))
+
+    # remove foreground from background
+    bg_image = cv2.bitwise_and(bg_image, bg_image, mask = mask)
+    return cv2.add(bg_image, fg_image)

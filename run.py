@@ -6,6 +6,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider, Button, RadioButtons
 import random
+import time
+
 
 from lib import *
 
@@ -16,6 +18,9 @@ img = cv2.imread("photo.jpg")
 cv2.imshow('Original', img)
 (H, W) = img.shape[:2]
 
+
+all_possible_colors_orig = generate_unique_colors(W, H)
+all_possible_colors = all_possible_colors_orig[:]
 
 
 def hed():
@@ -32,20 +37,6 @@ def hed():
 
 dilate_shape = cv2.MORPH_ELLIPSE
 
-def dilate(edges, size):
-    if int(size) <= 0:
-        return edges;
-
-    dilatation_size = int(size)
-    dilation_shape = cv2.MORPH_TOPHAT
-    # element = cv2.getStructuringElement(dilation_shape, (2 * dilatation_size + 1, 2 * dilatation_size + 1),
-    #                                    (dilatation_size, dilatation_size))
-    kernel = cv2.getStructuringElement(dilate_shape, (int(size),int(size)))
-
-    # edges = cv2.morphologyEx(edges, cv2.MORPH_OPEN, kernel)
-
-    return cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel)
-    # return cv2.dilate(edges, element)
 
 def canny(min, max):
     return cv2.Canny(img, min, max, apertureSize=3, L2gradient=True)
@@ -66,9 +57,6 @@ sobel_thresh = 15
 
 # sob = sobel(sobel_thresh)
 # seed = (int(W/2),int(H/2))
-floodflags = 4
-floodflags |= cv2.FLOODFILL_MASK_ONLY
-floodflags |= (255 << 8)
 
 
 def draw_rectangle(mask, point):
@@ -98,10 +86,10 @@ misc_slider_ax  = fig.add_axes([0.25, 0.1, 0.65, 0.03])
 misc_slider = Slider(misc_slider_ax, 'misc slider', 0, 20, valinit=5)
 
 b_slider_ax  = fig.add_axes([0.25, 0.05, 0.65, 0.03])
-b_slider = Slider(b_slider_ax, 'B', 0, 400, valinit=75)
+b_slider = Slider(b_slider_ax, 'B', 0, 10, valinit=2)
 
 c_slider_ax  = fig.add_axes([0.25, 0.0, 0.65, 0.03])
-c_slider = Slider(c_slider_ax, 'C', 0, 500, valinit=180)
+c_slider = Slider(c_slider_ax, 'C', 0, 15000, valinit=1000)
 
 # Define an action for modifying the line when any slider's value changes
 def sliders_on_changed(val):
@@ -113,16 +101,6 @@ def sliders_on_changed(val):
 all_segments_mask = np.zeros((H,W,3), np.uint8)
 
 
-def generate_unique_colors():
-    colors = []
-    for i in range(int((W*H)*2)):
-        r = random.randint(20,245)
-        g = random.randint(20,245)
-        b = random.randint(20,245)
-        colors.append([r,g,b])
-    return  list(set(tuple(sorted(sub)) for sub in colors))
-
-all_possible_colors = generate_unique_colors()
 
 
 
@@ -133,8 +111,6 @@ def is_within_boundaries(x, y, W, H):
     else:
         return True
 
-def is_black(rgb_array):
-    return not np.any(rgb_array)
 
                 
 def dillute_to_neighbour_if_empty(neighbour_x, neighbour_y, current_pixel, col):
@@ -214,53 +190,29 @@ def flood_fill_on_touch_points(edges):
 
 def render():
     print('rendering...')
-    global all_segments_mask, img
+    global all_segments_mask, img, all_possible_colors
+
 
     all_segments_mask = np.zeros((H,W,3), np.uint8)
 
     
-    # if int(misc_slider.val)%2 == 0:
-    #     med = int(misc_slider.val) + 1
-    # else:
-    #     med = int(misc_slider.val)
+    # flood_fill_on_touch_points(edges)
 
 
-    # median = cv2.medianBlur(img, med)
-    median = cv2.bilateralFilter(img,int(misc_slider.val),int(b_slider.val),int(b_slider.val))
 
+    start = time.time()
+    # # for touch_point in touch_points:
+    step = int(misc_slider.val)
 
-    # edges = dilate(canny(canny_min_thresh_slider.val, canny_max_thresh_slider.val), misc_slider.val)
-    edges = sobel(median, sobel_thresh_slider.val)
-    # edges = sobel(edges, canny_min_thresh_slider.val, depth=cv2.CV_8U)
+    segments_mask, all_possible_colors =  fill_sobel_segments(img, sobel_thresh=int(sobel_thresh_slider.val), min_filled_pixels_per_segment=c_slider.val, dilate_size=2, skip_step=8, all_possible_colors=all_possible_colors)
 
-    flood_fill_on_touch_points(edges)
+    all_segments_mask = cv2.add(all_segments_mask, segments_mask)
 
+    segments_mask, all_possible_colors =  fill_sobel_segments(img, sobel_thresh=15, min_filled_pixels_per_segment=433, dilate_size=2, skip_step=8, all_possible_colors=all_possible_colors)
 
-    # hough_lines(img, canny_min_thresh_slider.val, canny_max_thresh_slider.val, misc_slider.val, b_slider.val, c_slider.val, maxLineGap=sobel_thresh_slider.val )
+    all_segments_mask = add_non_black_to_image(bg_image=all_segments_mask, fg_image=segments_mask)
 
-
-    # painted_areas = 0
-
-    # # # for touch_point in touch_points:
-    # for y in range(H):
-    #     for x in range(W):
-    #         # print(f'processing pixel: ({x},{y})')
-    #         # print(f'all_segments_mask[y,x]: {all_segments_mask[y,x]}')
-    #         if edges[y, x] != 255 and is_black(all_segments_mask[y,x]):
-    #             mask = np.zeros((H+2,W+2), np.uint8)
-    #             cv2.floodFill(edges, mask, seedPoint=(x,y), newVal=(255,0,0), loDiff=(1,)*3, upDiff=(1,)*3, flags=floodflags)
-    #             mask = mask[1:1+H, 1:1+W]
-    #             # print(f'W: {W}')
-    #             # print(f'H: {H}')
-    #             # print(f'mask.shape: {mask.shape}')
-
-    #             solid_color_image = np.zeros((H,W,3), np.uint8)
-    #             solid_color_image[:,0:W] = all_possible_colors.pop()
-
-    #             # get first masked value (foreground)
-    #             new_colored_segment = cv2.bitwise_or(solid_color_image, solid_color_image, mask=mask)
-    #             all_segments_mask = cv2.bitwise_or(new_colored_segment, all_segments_mask)
-    #             painted_areas += 1
+    print(f'time tooks: {int((time.time() - start)*1000)} ms')
 
     # # dillute_segments()
 
@@ -269,8 +221,7 @@ def render():
 
 
 
-    cv2.imshow("sobel", edges)
-    cv2.imshow("median", median)
+    # cv2.imshow("sobel", edges)
     # cv2.imshow("flood fill", mask)
     cv2.imshow("all_segments_mask", all_segments_mask)
     
@@ -295,8 +246,10 @@ c_slider.on_changed(sliders_on_changed)
 reset_button_ax = fig.add_axes([0.8, 0.025, 0.1, 0.04])
 reset_button = Button(reset_button_ax, 'Reset', hovercolor='0.975')
 def reset_button_on_clicked(mouse_event):
-    touch_points.clear()
-    render()
+    cv2.imwrite('all_segments_mask.png', all_segments_mask)
+
+    # touch_points.clear()
+    # render()
 reset_button.on_clicked(reset_button_on_clicked)
 
 # Add a set of radio buttons for changing color
