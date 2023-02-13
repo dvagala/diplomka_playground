@@ -13,7 +13,7 @@ from lib import *
 img = cv2.imread("photo.jpg")
 # img = cv2.GaussianBlur(img, (3,3), 0) 
 # img = cv2.imread("photo_small.jpg")
-# cv2.imshow('Original', img)
+cv2.imshow('Original', img)
 (H, W) = img.shape[:2]
 
 
@@ -33,6 +33,9 @@ def hed():
 dilate_shape = cv2.MORPH_ELLIPSE
 
 def dilate(edges, size):
+    if int(size) <= 0:
+        return edges;
+
     dilatation_size = int(size)
     dilation_shape = cv2.MORPH_TOPHAT
     # element = cv2.getStructuringElement(dilation_shape, (2 * dilatation_size + 1, 2 * dilatation_size + 1),
@@ -92,10 +95,10 @@ sobel_thresh_slider_ax  = fig.add_axes([0.25, 0.15, 0.65, 0.03])
 sobel_thresh_slider = Slider(sobel_thresh_slider_ax, 'Sobel thresh', 0.1, 300.0, valinit=sobel_thresh)
 
 misc_slider_ax  = fig.add_axes([0.25, 0.1, 0.65, 0.03])
-misc_slider = Slider(misc_slider_ax, 'misc slider', 0, 300, valinit=80)
+misc_slider = Slider(misc_slider_ax, 'misc slider', 0, 20, valinit=5)
 
 b_slider_ax  = fig.add_axes([0.25, 0.05, 0.65, 0.03])
-b_slider = Slider(b_slider_ax, 'B', 0, 50, valinit=1)
+b_slider = Slider(b_slider_ax, 'B', 0, 400, valinit=75)
 
 c_slider_ax  = fig.add_axes([0.25, 0.0, 0.65, 0.03])
 c_slider = Slider(c_slider_ax, 'C', 0, 500, valinit=180)
@@ -215,20 +218,30 @@ def render():
 
     all_segments_mask = np.zeros((H,W,3), np.uint8)
 
+    
+    # if int(misc_slider.val)%2 == 0:
+    #     med = int(misc_slider.val) + 1
+    # else:
+    #     med = int(misc_slider.val)
+
+
+    # median = cv2.medianBlur(img, med)
+    median = cv2.bilateralFilter(img,int(misc_slider.val),int(b_slider.val),int(b_slider.val))
+
 
     # edges = dilate(canny(canny_min_thresh_slider.val, canny_max_thresh_slider.val), misc_slider.val)
-    # edges = dilate(sobel(img, sobel_thresh_slider.val), misc_slider.val)
+    edges = sobel(median, sobel_thresh_slider.val)
     # edges = sobel(edges, canny_min_thresh_slider.val, depth=cv2.CV_8U)
 
-    # flood_fill_on_touch_points(edges)
+    flood_fill_on_touch_points(edges)
 
 
-    hough_lines(img, canny_min_thresh_slider.val, canny_max_thresh_slider.val, misc_slider.val, b_slider.val, c_slider.val, maxLineGap=sobel_thresh_slider.val )
+    # hough_lines(img, canny_min_thresh_slider.val, canny_max_thresh_slider.val, misc_slider.val, b_slider.val, c_slider.val, maxLineGap=sobel_thresh_slider.val )
 
 
-    painted_areas = 0
+    # painted_areas = 0
 
-    # # for touch_point in touch_points:
+    # # # for touch_point in touch_points:
     # for y in range(H):
     #     for x in range(W):
     #         # print(f'processing pixel: ({x},{y})')
@@ -251,14 +264,15 @@ def render():
 
     # # dillute_segments()
 
-    # print(f'painted areas: {painted_areas}')
-    # print(f'W*H: {W*H}')
+    # # print(f'painted areas: {painted_areas}')
+    # # print(f'W*H: {W*H}')
 
 
 
-    # cv2.imshow("sobel", edges)
+    cv2.imshow("sobel", edges)
+    cv2.imshow("median", median)
     # cv2.imshow("flood fill", mask)
-    # cv2.imshow("all_segments_mask", all_segments_mask)
+    cv2.imshow("all_segments_mask", all_segments_mask)
     
 
 
