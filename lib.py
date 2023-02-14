@@ -214,6 +214,17 @@ def manually_propagate(img, colored_segments):
     return propagated_image
 
 def propagate_image(img, colored_segments, added_opacity = 0):
+    H = img.shape[0]
+    W = img.shape[1]
+
+    brush_color = (0,0,255)
+
+    solid_color_image = np.zeros((H,W,3), np.uint8)
+    solid_color_image[:,0:W] = brush_color
+    mask = cv2.inRange(colored_segments, np.array([0,0,0]), np.array([0,0,0]))
+    mask_inv = cv2.bitwise_not(mask)
+    colored_segments = cv2.bitwise_or(solid_color_image, solid_color_image, mask=mask_inv)
+
     img_v,_,_ = cv2.split(cv2.cvtColor(img, cv2.COLOR_BGR2YUV))
     colored_segments_v,u,y = cv2.split(cv2.cvtColor(colored_segments, cv2.COLOR_BGR2YUV))
 
@@ -228,3 +239,13 @@ def propagate_image(img, colored_segments, added_opacity = 0):
     cv2.addWeighted(propagated_image, 1 - (added_opacity/255), colored_segments, 0 + (added_opacity/255), 0.0, propagated_image);
 
     return propagated_image
+
+def create_final_image(img, propagated_image, selected_segments):
+    mask = cv2.inRange(selected_segments, np.array([0,0,0]), np.array([0,0,0]))
+    mask_inv = cv2.bitwise_not(mask)
+
+    propagated_selected_segments = cv2.bitwise_and(propagated_image, propagated_image, mask = mask_inv)
+
+    return add_non_black_to_image(img, propagated_selected_segments)
+
+

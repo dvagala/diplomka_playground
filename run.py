@@ -15,7 +15,7 @@ from lib import *
 img = cv2.imread("photo.jpg")
 # img = cv2.GaussianBlur(img, (3,3), 0) 
 # img = cv2.imread("photo_small.jpg")
-cv2.imshow('Original', img)
+# cv2.imshow('img', img)
 (H, W) = img.shape[:2]
 
 
@@ -99,6 +99,7 @@ def sliders_on_changed(val):
 
 
 all_segments_mask = np.zeros((H,W,3), np.uint8)
+selected_segments = np.zeros((H,W,3), np.uint8)
 
 
 
@@ -174,7 +175,7 @@ def dillute_segments():
 
         i += 1
 
-def flood_fill_on_touch_points(edges):
+def flood_fill_edges_on_touch_points(edges):
     global all_segments_mask
     for touch_point in touch_points:
         if edges[touch_point[1], touch_point[0]] != 255:
@@ -187,16 +188,39 @@ def flood_fill_on_touch_points(edges):
             new_colored_segment = cv2.bitwise_or(solid_color_image, solid_color_image, mask=mask)
             all_segments_mask = cv2.bitwise_or(new_colored_segment, all_segments_mask)
 
+def flood_fill_segmented_on_touch_points(all_segments):
+    selected_segments = np.zeros((H,W,3), np.uint8)
+
+    for touch_point in touch_points:
+        if is_black(selected_segments[touch_point[1], touch_point[0]]):
+            mask = np.zeros((H+2,W+2),np.uint8)
+            cv2.floodFill(all_segments, mask, seedPoint=touch_point, newVal=(255,0,0), loDiff=(1,)*3, upDiff=(1,)*3, flags=floodflags)
+            mask = mask[1:1+H, 1:1+W]
+
+            new_colored_segment = cv2.bitwise_and(all_segments, all_segments, mask=mask)
+            selected_segments = cv2.bitwise_or(new_colored_segment, selected_segments)
+
+    return selected_segments
+
+
+all_possible_colors = all_possible_colors_orig[:]
+
+all_segments_mask = np.zeros((H,W,3), np.uint8)
+all_segments_mask[:,0:W] = all_possible_colors.pop()
+
+
+segments_mask, all_possible_colors =  fill_sobel_segments(img, sobel_thresh=31, min_filled_pixels_per_segment=144, dilate_size=2, skip_step=15, all_possible_colors=all_possible_colors)
+all_segments_mask = add_non_black_to_image(bg_image=all_segments_mask, fg_image=segments_mask)
+
+segments_mask, all_possible_colors =  fill_sobel_segments(img, sobel_thresh=15, min_filled_pixels_per_segment=433, dilate_size=2, skip_step=8, all_possible_colors=all_possible_colors)
+all_segments_mask = add_non_black_to_image(bg_image=all_segments_mask, fg_image=segments_mask)
 
 def render():
     print('rendering...')
-    global all_segments_mask, img, all_possible_colors, done
-
-    all_possible_colors = all_possible_colors_orig[:]
+    global all_segments_mask, img, all_possible_colors, selected_segments
 
 
-    all_segments_mask = np.zeros((H,W,3), np.uint8)
-    all_segments_mask[:,0:W] = all_possible_colors.pop()
+
 
     
     # flood_fill_on_touch_points(edges)
@@ -212,22 +236,26 @@ def render():
     # all_segments_mask = add_non_black_to_image(bg_image=all_segments_mask, fg_image=segments_mask)
 
 
-    segments_mask, all_possible_colors =  fill_sobel_segments(img, sobel_thresh=31, min_filled_pixels_per_segment=144, dilate_size=2, skip_step=15, all_possible_colors=all_possible_colors)
-    all_segments_mask = add_non_black_to_image(bg_image=all_segments_mask, fg_image=segments_mask)
-
-    segments_mask, all_possible_colors =  fill_sobel_segments(img, sobel_thresh=15, min_filled_pixels_per_segment=433, dilate_size=2, skip_step=8, all_possible_colors=all_possible_colors)
-    all_segments_mask = add_non_black_to_image(bg_image=all_segments_mask, fg_image=segments_mask)
 
 
+    selected_segments = flood_fill_segmented_on_touch_points(all_segments_mask)
+
+    # selected_segments = remove_flood_fill_on_subtracted_points(selected_segments)
+
+    propagated_image = propagate_image(img, selected_segments, added_opacity = canny_min_thresh_slider.val)
 
 
-    propagated_image = propagate_image(img, all_segments_mask, added_opacity = canny_min_thresh_slider.val)
+    final_image = create_final_image(img, propagated_image, selected_segments)
+
 
 
     print(f'time tooks: {int((time.time() - start)*1000)} ms')
 
 
-    cv2.imshow("propagated_image", propagated_image)
+    # cv2.imshow("propagated_image", propagated_image)
+
+    # cv2.imshow("selected_segments", selected_segments)
+    cv2.imshow("final_image", final_image)
 
 
     # cv2.imshow("sobel", edges)
@@ -279,16 +307,76 @@ def color_radios_on_clicked(label):
     fig.canvas.draw_idle()
 color_radios.on_clicked(color_radios_on_clicked)
 
-def on_mouse(event, x, y, flags, param):
+
+l_mouse_is_pressed = False
+r_mouse_is_pressed = False
+
+def add_touch_point(x, y):
+    print('x = %d, y = %d'%(x, y))
+
+    # a brush size
+    touch_points.append((x-1, y-1))
+    touch_points.append((x, y-1))
+    touch_points.append((x+1, y-1))
+    
+    touch_points.append((x+1, y))
+    touch_points.append((x+1, y+1))
+
+    touch_points.append((x, y+1))
+    touch_points.append((x-1, y+1))
+
+    touch_points.append((x-1, y))
+
+    touch_points.append((x, y))
+
+def on_mouse(event, x, y, _, __):
+    global l_mouse_is_pressed, r_mouse_is_pressed, touch_points
+
+    if x < 0 or y < 0 or x >= W or y >= H:
+        return
+
     if event == cv2.EVENT_LBUTTONDOWN:
-        print('x = %d, y = %d'%(x, y))
-        touch_points.append((x, y))
-        render()
+        l_mouse_is_pressed = True
+        add_touch_point(x, y)
+    elif event == cv2.EVENT_LBUTTONUP:
+        l_mouse_is_pressed = False
+    if event == cv2.EVENT_RBUTTONDOWN:
+        r_mouse_is_pressed = True
+        remove_all_points_int_this_segment(x, y)
+    elif event == cv2.EVENT_RBUTTONUP:
+        r_mouse_is_pressed = False
+    if event == cv2.EVENT_MBUTTONDOWN:
+        # undo
+        touch_points = touch_points[:-1]
+    elif event == cv2.EVENT_MOUSEMOVE and l_mouse_is_pressed:
+        add_touch_point(x, y)
+    elif event == cv2.EVENT_MOUSEMOVE and r_mouse_is_pressed:
+        remove_all_points_int_this_segment(x, y)
+    else:
+        return
+    render()
+
+def remove_all_points_int_this_segment(x, y):
+    global touch_points
+
+    new_touch_points = []
+
+    # we cannot just easily compare colors, because currently sandly not each segment has it's own color.
+    mask = np.zeros((H+2,W+2),np.uint8)
+    cv2.floodFill(selected_segments, mask, seedPoint=(x,y), newVal=(255,0,0), loDiff=(1,)*3, upDiff=(1,)*3, flags=floodflags)
+    segment_mask_under_r_touch_point = mask[1:1+H, 1:1+W]
+
+
+    for touch_point in touch_points:
+        if segment_mask_under_r_touch_point[touch_point[1], touch_point[0]] == 0:
+            new_touch_points.append(touch_point)
+
+    touch_points = new_touch_points
 
 
 render()
 
-cv2.setMouseCallback('sobel', on_mouse)
+cv2.setMouseCallback('final_image', on_mouse)
 
 plt.show()
 
