@@ -74,7 +74,7 @@ def draw_rectangle(mask, point):
 
 
 canny_min_thresh_slider_ax  = fig.add_axes([0.25, 0.25, 0.65, 0.03])
-canny_min_thresh_slider = Slider(canny_min_thresh_slider_ax, 'Min thresh', 0.1, 300.0, valinit=canny_min_thresh)
+canny_min_thresh_slider = Slider(canny_min_thresh_slider_ax, 'Min thresh', 0.1, 255.0, valinit=50)
 
 canny_max_thresh_slider_ax = fig.add_axes([0.25, 0.2, 0.65, 0.03])
 canny_max_thresh_slider = Slider(canny_max_thresh_slider_ax, 'Max thresh', 0.1, 300.0, valinit=canny_max_thresh)
@@ -190,10 +190,13 @@ def flood_fill_on_touch_points(edges):
 
 def render():
     print('rendering...')
-    global all_segments_mask, img, all_possible_colors
+    global all_segments_mask, img, all_possible_colors, done
+
+    all_possible_colors = all_possible_colors_orig[:]
 
 
     all_segments_mask = np.zeros((H,W,3), np.uint8)
+    all_segments_mask[:,0:W] = all_possible_colors.pop()
 
     
     # flood_fill_on_touch_points(edges)
@@ -204,21 +207,27 @@ def render():
     # # for touch_point in touch_points:
     step = int(misc_slider.val)
 
-    segments_mask, all_possible_colors =  fill_sobel_segments(img, sobel_thresh=int(sobel_thresh_slider.val), min_filled_pixels_per_segment=c_slider.val, dilate_size=2, skip_step=8, all_possible_colors=all_possible_colors)
 
-    all_segments_mask = cv2.add(all_segments_mask, segments_mask)
+    # segments_mask, all_possible_colors =  fill_sobel_segments(img, sobel_thresh=int(sobel_thresh_slider.val), min_filled_pixels_per_segment=c_slider.val, dilate_size=2, skip_step=8, all_possible_colors=all_possible_colors)
+    # all_segments_mask = add_non_black_to_image(bg_image=all_segments_mask, fg_image=segments_mask)
+
+
+    segments_mask, all_possible_colors =  fill_sobel_segments(img, sobel_thresh=31, min_filled_pixels_per_segment=144, dilate_size=2, skip_step=15, all_possible_colors=all_possible_colors)
+    all_segments_mask = add_non_black_to_image(bg_image=all_segments_mask, fg_image=segments_mask)
 
     segments_mask, all_possible_colors =  fill_sobel_segments(img, sobel_thresh=15, min_filled_pixels_per_segment=433, dilate_size=2, skip_step=8, all_possible_colors=all_possible_colors)
-
     all_segments_mask = add_non_black_to_image(bg_image=all_segments_mask, fg_image=segments_mask)
+
+
+
+
+    propagated_image = propagate_image(img, all_segments_mask, added_opacity = canny_min_thresh_slider.val)
+
 
     print(f'time tooks: {int((time.time() - start)*1000)} ms')
 
-    # # dillute_segments()
 
-    # # print(f'painted areas: {painted_areas}')
-    # # print(f'W*H: {W*H}')
-
+    cv2.imshow("propagated_image", propagated_image)
 
 
     # cv2.imshow("sobel", edges)
@@ -283,28 +292,3 @@ cv2.setMouseCallback('sobel', on_mouse)
 
 plt.show()
 
-
-
-def apply_brightness_contrast(input_img, brightness = 0, contrast = 0):
-    if brightness != 0:
-        if brightness > 0:
-            shadow = brightness
-            highlight = 255
-        else:
-            shadow = 0
-            highlight = 255 + brightness
-        alpha_b = (highlight - shadow)/255
-        gamma_b = shadow
-        
-        buf = cv2.addWeighted(input_img, alpha_b, input_img, 0, gamma_b)
-    else:
-        buf = input_img.copy()
-    
-    if contrast != 0:
-        f = 131*(contrast + 127)/(127*(131-contrast))
-        alpha_c = f
-        gamma_c = 127*(1-f)
-        
-        buf = cv2.addWeighted(buf, alpha_c, buf, 0, gamma_c)
-
-    return buf

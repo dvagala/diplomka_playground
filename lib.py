@@ -56,6 +56,30 @@ def superpixel(img,b_slider, c_slider, misc_slider):
 
 
 
+def apply_brightness_contrast(input_img, brightness = 0, contrast = 0):
+    if brightness != 0:
+        if brightness > 0:
+            shadow = brightness
+            highlight = 255
+        else:
+            shadow = 0
+            highlight = 255 + brightness
+        alpha_b = (highlight - shadow)/255
+        gamma_b = shadow
+        
+        buf = cv2.addWeighted(input_img, alpha_b, input_img, 0, gamma_b)
+    else:
+        buf = input_img.copy()
+    
+    if contrast != 0:
+        f = 131*(contrast + 127)/(127*(131-contrast))
+        alpha_c = f
+        gamma_c = 127*(1-f)
+        
+        buf = cv2.addWeighted(buf, alpha_c, buf, 0, gamma_c)
+
+    return buf
+
 
 def hough_lines(img, min, max, threshold, rho, minLineLenght, maxLineGap):
     # img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -164,3 +188,43 @@ def add_non_black_to_image(bg_image, fg_image, mask = []):
     # remove foreground from background
     bg_image = cv2.bitwise_and(bg_image, bg_image, mask = mask)
     return cv2.add(bg_image, fg_image)
+
+
+def clamp_to_byte(int):
+    if int > 255:
+        return 255
+    elif int < 0:
+        return 0
+    else:
+        return int
+
+
+def manually_propagate(img, colored_segments):
+    H = img.shape[0]
+    W = img.shape[1]
+
+    img_grey = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    propagated_image = np.zeros((H,W,3), np.uint8)
+    for y in range(H):
+        for x in range(W):
+            segment_color = colored_segments[y,x]
+            avg_grey = 127
+            grey_to_add = img_grey[y,x] - avg_grey
+            propagated_image[y,x] = [clamp_to_byte(segment_color[0] + grey_to_add), clamp_to_byte(segment_color[1] + grey_to_add), clamp_to_byte(segment_color[2] + grey_to_add)]
+    return propagated_image
+
+def propagate_image(img, colored_segments, added_opacity = 0):
+    img_v,_,_ = cv2.split(cv2.cvtColor(img, cv2.COLOR_BGR2YUV))
+    colored_segments_v,u,y = cv2.split(cv2.cvtColor(colored_segments, cv2.COLOR_BGR2YUV))
+
+    v = colored_segments_v + (img_v.astype(int) - 127)
+    v = np.clip(v, 0, 255)
+    v = v.astype(u.dtype)
+
+
+    propagated_image = cv2.merge([v, u, y])
+    propagated_image = cv2.cvtColor(propagated_image, cv2.COLOR_YUV2BGR)
+
+    cv2.addWeighted(propagated_image, 1 - (added_opacity/255), colored_segments, 0 + (added_opacity/255), 0.0, propagated_image);
+
+    return propagated_image
