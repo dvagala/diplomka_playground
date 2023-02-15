@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider, Button, RadioButtons
 import random
 import time
+import itertools
 
 
 from lib import *
@@ -323,25 +324,30 @@ color_radios.on_clicked(color_radios_on_clicked)
 l_mouse_is_pressed = False
 r_mouse_is_pressed = False
 
-def add_touch_point(x, y):
-    print('x = %d, y = %d'%(x, y))
+def add_touch_point(touch_x, touch_y):
+    global touch_points
 
-    if x < 1 or y < 1 or x >= W-1 or y >= H-1:
-        return
-    # a brush size
-    touch_points.append((x-1, y-1))
-    touch_points.append((x, y-1))
-    touch_points.append((x+1, y-1))
-    
-    touch_points.append((x+1, y))
-    touch_points.append((x+1, y+1))
+    print('x = %d, y = %d'%(touch_x, touch_y))
 
-    touch_points.append((x, y+1))
-    touch_points.append((x-1, y+1))
+    size = 1
+    stride = 1
 
-    touch_points.append((x-1, y))
+    assert size % 2 == 1
+    middle_index = int((size-1)/2)
 
-    touch_points.append((x, y))
+    for y in range(0,size,stride):
+        for x in range(0, size, stride):
+            pixel_x = int(touch_x + x - middle_index)
+            pixel_y = int(touch_y + y - middle_index)
+            if pixel_x < 0 or pixel_y < 0 or pixel_x >= W or pixel_y >= H:
+                continue
+
+            touch_points.append((pixel_x, pixel_y))
+
+    touch_points.sort()
+    touch_points = list(k for k,_ in itertools.groupby(touch_points))
+
+
 
 def on_mouse(event, x, y, _, __):
     global l_mouse_is_pressed, r_mouse_is_pressed, touch_points
