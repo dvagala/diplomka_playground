@@ -38,8 +38,8 @@ def hed():
 dilate_shape = cv2.MORPH_ELLIPSE
 
 
-def canny(min, max):
-    return cv2.Canny(img, min, max, apertureSize=3, L2gradient=True)
+def canny(input, min, max):
+    return cv2.Canny(input, min, max, apertureSize=3, L2gradient=True)
 
 
 touch_points = []
@@ -73,23 +73,35 @@ def draw_rectangle(mask, point):
     mask[point[1]+1, point[0]+1] = 255
 
 
-canny_min_thresh_slider_ax  = fig.add_axes([0.25, 0.25, 0.65, 0.03])
-canny_min_thresh_slider = Slider(canny_min_thresh_slider_ax, 'Min thresh', 0.1, 255.0, valinit=50)
+sobel_1_thresh_slider_ax  = fig.add_axes([0.25, 0.65, 0.65, 0.03])
+sobel_1_thresh_slider = Slider(sobel_1_thresh_slider_ax, 'Sobel 1 thresh', 0.1, 500, valinit=60)
 
-canny_max_thresh_slider_ax = fig.add_axes([0.25, 0.2, 0.65, 0.03])
-canny_max_thresh_slider = Slider(canny_max_thresh_slider_ax, 'Max thresh', 0.1, 300.0, valinit=canny_max_thresh)
+sobel_2_thresh_slider_ax = fig.add_axes([0.25, 0.6, 0.65, 0.03])
+sobel_2_thresh_slider = Slider(sobel_2_thresh_slider_ax, 'Sobel 2 thresh', 0.1, 500, valinit=33)
 
-sobel_thresh_slider_ax  = fig.add_axes([0.25, 0.15, 0.65, 0.03])
-sobel_thresh_slider = Slider(sobel_thresh_slider_ax, 'Sobel thresh', 0.1, 300.0, valinit=sobel_thresh)
+sobel_3_thresh_slider_ax = fig.add_axes([0.25, 0.55, 0.65, 0.03])
+sobel_3_thresh_slider = Slider(sobel_3_thresh_slider_ax, 'Sobel 3 thresh', 0.1, 500, valinit=15)
 
-misc_slider_ax  = fig.add_axes([0.25, 0.1, 0.65, 0.03])
-misc_slider = Slider(misc_slider_ax, 'misc slider', 0, 20, valinit=5)
+dilate_1_slider_ax  = fig.add_axes([0.25, 0.5, 0.65, 0.03])
+dilate_1_slider = Slider(dilate_1_slider_ax, 'Dilate 1', 0.1, 20, valinit=2)
 
-b_slider_ax  = fig.add_axes([0.25, 0.05, 0.65, 0.03])
-b_slider = Slider(b_slider_ax, 'B', 0, 10, valinit=2)
+dilate_2_slider_ax  = fig.add_axes([0.25, 0.45, 0.65, 0.03])
+dilate_2_slider = Slider(dilate_2_slider_ax, 'Dilate 2', 0, 20, valinit=2)
 
-c_slider_ax  = fig.add_axes([0.25, 0.0, 0.65, 0.03])
-c_slider = Slider(c_slider_ax, 'C', 0, 15000, valinit=1000)
+dilate_3_slider_ax  = fig.add_axes([0.25, 0.4, 0.65, 0.03])
+dilate_3_slider = Slider(dilate_3_slider_ax, 'Dilate 3', 0, 20, valinit=2)
+
+min_area_1_slider_ax  = fig.add_axes([0.25, 0.35, 0.65, 0.03])
+min_area_1_slider = Slider(min_area_1_slider_ax, 'Min area 1', 0, 30000, valinit=0)
+
+min_area_2_slider_ax  = fig.add_axes([0.25, 0.3, 0.65, 0.03])
+min_area_2_slider = Slider(min_area_2_slider_ax, 'Min area 2', 0, 30000, valinit=0)
+
+min_area_3_slider_ax  = fig.add_axes([0.25, 0.25, 0.65, 0.03])
+min_area_3_slider = Slider(min_area_3_slider_ax, 'Min area 3', 0, 30000, valinit=0)
+
+skip_step_slider_ax  = fig.add_axes([0.25, 0.2, 0.65, 0.03])
+skip_step_slider = Slider(skip_step_slider_ax, 'Skip step', 0, 30, valinit=8)
 
 # Define an action for modifying the line when any slider's value changes
 def sliders_on_changed(val):
@@ -202,51 +214,56 @@ def flood_fill_segmented_on_touch_points(all_segments):
 
     return selected_segments
 
-
-all_possible_colors = all_possible_colors_orig[:]
-
-all_segments_mask = np.zeros((H,W,3), np.uint8)
-all_segments_mask[:,0:W] = all_possible_colors.pop()
+def split(list):  
+    return list[::3], list[1::3], list[2::3]
 
 
-segments_mask, all_possible_colors =  fill_sobel_segments(img, sobel_thresh=31, min_filled_pixels_per_segment=144, dilate_size=2, skip_step=15, all_possible_colors=all_possible_colors)
-all_segments_mask = add_non_black_to_image(bg_image=all_segments_mask, fg_image=segments_mask)
+def create_all_segments_mask():
+    colors1, colors2, colors3 = split(all_possible_colors_orig[:])
 
-segments_mask, all_possible_colors =  fill_sobel_segments(img, sobel_thresh=15, min_filled_pixels_per_segment=433, dilate_size=2, skip_step=8, all_possible_colors=all_possible_colors)
-all_segments_mask = add_non_black_to_image(bg_image=all_segments_mask, fg_image=segments_mask)
+    all_segments_mask = np.zeros((H,W,3), np.uint8)
+    all_segments_mask[:,0:W] = colors1.pop()
+
+    segments_mask, colors =  fill_sobel_segments(img, sobel_thresh=sobel_1_thresh_slider.val, min_filled_pixels_per_segment=int(min_area_1_slider.val), dilate_size=int(dilate_1_slider.val), skip_step=int(skip_step_slider.val), all_possible_colors=colors1)
+    all_segments_mask = add_non_black_to_image(bg_image=all_segments_mask, fg_image=segments_mask)
+
+    segments_mask, colors =  fill_sobel_segments(img, sobel_thresh=sobel_2_thresh_slider.val, min_filled_pixels_per_segment=int(min_area_2_slider.val), dilate_size=int(dilate_2_slider.val), skip_step=int(skip_step_slider.val), all_possible_colors=colors2)
+    all_segments_mask = add_non_black_to_image(bg_image=all_segments_mask, fg_image=segments_mask)
+
+    segments_mask, colors =  fill_sobel_segments(img, sobel_thresh=sobel_3_thresh_slider.val, min_filled_pixels_per_segment=int(min_area_3_slider.val), dilate_size=int(dilate_3_slider.val), skip_step=int(skip_step_slider.val), all_possible_colors=colors3)
+    all_segments_mask = add_non_black_to_image(bg_image=all_segments_mask, fg_image=segments_mask)
+
+    # segments_mask, all_possible_colors =  fill_sobel_segments(img, sobel_thresh=int(sobel_thresh_slider.val), min_filled_pixels_per_segment=c_slider.val, dilate_size=2, skip_step=8, all_possible_colors=all_possible_colors)
+    # all_segments_mask = add_non_black_to_image(bg_image=all_segments_mask, fg_image=segments_mask)
+
+    return all_segments_mask
+
+
+
+all_segments_mask = create_all_segments_mask()
+
+edges_from_segments = canny(all_segments_mask, 1, 1)
+edges_from_segments = cv2.cvtColor(edges_from_segments, cv2.COLOR_GRAY2BGR)
+
+
 
 def render():
     print('rendering...')
     global all_segments_mask, img, all_possible_colors, selected_segments
 
 
-
-
-    
-    # flood_fill_on_touch_points(edges)
-
-
-
     start = time.time()
-    # # for touch_point in touch_points:
-    step = int(misc_slider.val)
-
-
-    # segments_mask, all_possible_colors =  fill_sobel_segments(img, sobel_thresh=int(sobel_thresh_slider.val), min_filled_pixels_per_segment=c_slider.val, dilate_size=2, skip_step=8, all_possible_colors=all_possible_colors)
-    # all_segments_mask = add_non_black_to_image(bg_image=all_segments_mask, fg_image=segments_mask)
-
-
 
 
     selected_segments = flood_fill_segmented_on_touch_points(all_segments_mask)
-
-    # selected_segments = remove_flood_fill_on_subtracted_points(selected_segments)
-
-    propagated_image = propagate_image(img, selected_segments, added_opacity = canny_min_thresh_slider.val)
-
-
+    propagated_image = propagate_image(img, selected_segments, added_opacity = sobel_1_thresh_slider.val)
     final_image = create_final_image(img, propagated_image, selected_segments)
 
+    print(f'final_image: {final_image.shape}')
+    print(f'edges_from_segments: {edges_from_segments.shape}')
+
+    if l_mouse_is_pressed:
+        final_image = add_non_black_to_image(final_image, edges_from_segments)
 
 
     print(f'time tooks: {int((time.time() - start)*1000)} ms')
@@ -256,6 +273,7 @@ def render():
 
     # cv2.imshow("selected_segments", selected_segments)
     cv2.imshow("final_image", final_image)
+    cv2.imshow("edges_from_segments", edges_from_segments)
 
 
     # cv2.imshow("sobel", edges)
@@ -272,25 +290,29 @@ def render():
     print('finish render')
 
 
-canny_min_thresh_slider.on_changed(sliders_on_changed)
-canny_max_thresh_slider.on_changed(sliders_on_changed)
-sobel_thresh_slider.on_changed(sliders_on_changed)
-misc_slider.on_changed(sliders_on_changed)
-b_slider.on_changed(sliders_on_changed)
-c_slider.on_changed(sliders_on_changed)
+sobel_1_thresh_slider.on_changed(sliders_on_changed)
+sobel_2_thresh_slider.on_changed(sliders_on_changed)
+sobel_3_thresh_slider.on_changed(sliders_on_changed)
+dilate_1_slider.on_changed(sliders_on_changed)
+dilate_2_slider.on_changed(sliders_on_changed)
+dilate_3_slider.on_changed(sliders_on_changed)
+min_area_1_slider.on_changed(sliders_on_changed)
+min_area_2_slider.on_changed(sliders_on_changed)
+min_area_3_slider.on_changed(sliders_on_changed)
+skip_step_slider.on_changed(sliders_on_changed)
 
 # Add a button for resetting the parameters
 reset_button_ax = fig.add_axes([0.8, 0.025, 0.1, 0.04])
 reset_button = Button(reset_button_ax, 'Reset', hovercolor='0.975')
 def reset_button_on_clicked(mouse_event):
-    cv2.imwrite('all_segments_mask.png', all_segments_mask)
+    # cv2.imwrite('all_segments_mask.png', all_segments_mask)
 
-    # touch_points.clear()
+    touch_points.clear()
     # render()
 reset_button.on_clicked(reset_button_on_clicked)
 
 # Add a set of radio buttons for changing color
-color_radios_ax = fig.add_axes([0.025, 0.5, 0.15, 0.15] )
+color_radios_ax = fig.add_axes([0.025, 0.8, 0.15, 0.15] )
 color_radios = RadioButtons(color_radios_ax, ('cv2.MORPH_ELLIPSE', 'cv2.MORPH_CROSS','cv2.MORPH_RECT'), active=0)
 def color_radios_on_clicked(label):
     global dilate_shape
@@ -314,6 +336,8 @@ r_mouse_is_pressed = False
 def add_touch_point(x, y):
     print('x = %d, y = %d'%(x, y))
 
+    if x < 1 or y < 1 or x >= W-1 or y >= H-1:
+        return
     # a brush size
     touch_points.append((x-1, y-1))
     touch_points.append((x, y-1))
@@ -332,20 +356,18 @@ def add_touch_point(x, y):
 def on_mouse(event, x, y, _, __):
     global l_mouse_is_pressed, r_mouse_is_pressed, touch_points
 
-    if x < 0 or y < 0 or x >= W or y >= H:
-        return
 
     if event == cv2.EVENT_LBUTTONDOWN:
         l_mouse_is_pressed = True
         add_touch_point(x, y)
     elif event == cv2.EVENT_LBUTTONUP:
         l_mouse_is_pressed = False
-    if event == cv2.EVENT_RBUTTONDOWN:
+    elif event == cv2.EVENT_RBUTTONDOWN:
         r_mouse_is_pressed = True
         remove_all_points_int_this_segment(x, y)
     elif event == cv2.EVENT_RBUTTONUP:
         r_mouse_is_pressed = False
-    if event == cv2.EVENT_MBUTTONDOWN:
+    elif event == cv2.EVENT_MBUTTONDOWN:
         # undo
         touch_points = touch_points[:-1]
     elif event == cv2.EVENT_MOUSEMOVE and l_mouse_is_pressed:

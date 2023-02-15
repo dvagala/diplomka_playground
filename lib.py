@@ -126,6 +126,15 @@ def sobel(input, thresh, depth = cv2.CV_64F):
 def is_black(rgb_array):
     return not np.any(rgb_array)
 
+def erode(input, size):
+    if int(size) <= 0:
+        return input;
+
+    dilate_shape = cv2.MORPH_ELLIPSE
+    element = cv2.getStructuringElement(dilate_shape, (2 * size + 1, 2 * size + 1),
+                                       (size, size))
+    return cv2.erode(input, element)
+
 def dilate(edges, size):
     if int(size) <= 0:
         return edges;
