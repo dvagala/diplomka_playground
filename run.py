@@ -95,10 +95,10 @@ min_area_1_slider_ax  = fig.add_axes([0.25, 0.35, 0.65, 0.03])
 min_area_1_slider = Slider(min_area_1_slider_ax, 'Min area 1', 0, 30000, valinit=0)
 
 min_area_2_slider_ax  = fig.add_axes([0.25, 0.3, 0.65, 0.03])
-min_area_2_slider = Slider(min_area_2_slider_ax, 'Min area 2', 0, 30000, valinit=0)
+min_area_2_slider = Slider(min_area_2_slider_ax, 'Min area 2', 0, 30000, valinit=(W*H)/14563)
 
 min_area_3_slider_ax  = fig.add_axes([0.25, 0.25, 0.65, 0.03])
-min_area_3_slider = Slider(min_area_3_slider_ax, 'Min area 3', 0, 30000, valinit=0)
+min_area_3_slider = Slider(min_area_3_slider_ax, 'Min area 3', 0, 30000, valinit=(W*H)/4104)
 
 skip_step_slider_ax  = fig.add_axes([0.25, 0.2, 0.65, 0.03])
 skip_step_slider = Slider(skip_step_slider_ax, 'Skip step', 0, 30, valinit=8)
@@ -240,11 +240,12 @@ def create_all_segments_mask():
 
 
 
+
+# edges_from_segments = canny(all_segments_mask, 1, 1)
+# edges_from_segments = cv2.cvtColor(edges_from_segments, cv2.COLOR_GRAY2BGR)
+
 all_segments_mask = create_all_segments_mask()
-
-edges_from_segments = canny(all_segments_mask, 1, 1)
-edges_from_segments = cv2.cvtColor(edges_from_segments, cv2.COLOR_GRAY2BGR)
-
+cv2.imshow("all_segments_mask", all_segments_mask)
 
 
 def render():
@@ -259,12 +260,8 @@ def render():
     propagated_image = propagate_image(img, selected_segments, added_opacity = sobel_1_thresh_slider.val)
     final_image = create_final_image(img, propagated_image, selected_segments)
 
-    print(f'final_image: {final_image.shape}')
-    print(f'edges_from_segments: {edges_from_segments.shape}')
-
-    if l_mouse_is_pressed:
-        final_image = add_non_black_to_image(final_image, edges_from_segments)
-
+    # if l_mouse_is_pressed:
+    #     final_image = add_non_black_to_image(final_image, edges_from_segments)
 
     print(f'time tooks: {int((time.time() - start)*1000)} ms')
 
@@ -273,19 +270,12 @@ def render():
 
     # cv2.imshow("selected_segments", selected_segments)
     cv2.imshow("final_image", final_image)
-    cv2.imshow("edges_from_segments", edges_from_segments)
-
+    # cv2.imshow("edges_from_segments", edges_from_segments)
 
     # cv2.imshow("sobel", edges)
     # cv2.imshow("flood fill", mask)
-    cv2.imshow("all_segments_mask", all_segments_mask)
+    # cv2.imshow("all_segments_mask", all_segments_mask)
     
-
-
-    # cv2.imshow("all_segments_mask edges", sobel(all_segments_mask, 1))
-
-    # cv2.imwrite('all_segments_mask.png', all_segments_mask)
-
     fig.canvas.draw_idle()
     print('finish render')
 
