@@ -80,7 +80,7 @@ sobel_2_thresh_slider_ax = fig.add_axes([0.25, 0.6, 0.65, 0.03])
 sobel_2_thresh_slider = Slider(sobel_2_thresh_slider_ax, 'Sobel 2 thresh', 0.1, 500, valinit=33)
 
 sobel_3_thresh_slider_ax = fig.add_axes([0.25, 0.55, 0.65, 0.03])
-sobel_3_thresh_slider = Slider(sobel_3_thresh_slider_ax, 'Sobel 3 thresh', 0.1, 500, valinit=15)
+sobel_3_thresh_slider = Slider(sobel_3_thresh_slider_ax, 'Sobel 3 thresh', 0.1, 500, valinit=13)
 
 dilate_1_slider_ax  = fig.add_axes([0.25, 0.5, 0.65, 0.03])
 dilate_1_slider = Slider(dilate_1_slider_ax, 'Dilate 1', 0.1, 20, valinit=2)
@@ -239,13 +239,13 @@ def create_all_segments_mask():
     return all_segments_mask
 
 
+all_segments_mask = create_all_segments_mask()
+cv2.imshow("all_segments_mask", all_segments_mask)
 
 
 # edges_from_segments = canny(all_segments_mask, 1, 1)
 # edges_from_segments = cv2.cvtColor(edges_from_segments, cv2.COLOR_GRAY2BGR)
 
-all_segments_mask = create_all_segments_mask()
-cv2.imshow("all_segments_mask", all_segments_mask)
 
 
 def render():
