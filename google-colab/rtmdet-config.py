@@ -35,3 +35,9 @@ test_evaluator = val_evaluator
 
 # We can use the pre-trained Mask RCNN model to obtain higher performance
 load_from = 'https://download.openmmlab.com/mmdetection/v3.0/rtmdet/rtmdet-ins_m_8xb32-300e_coco/rtmdet-ins_m_8xb32-300e_coco_20221123_001039-6eba602e.pth'
+
+train_cfg = dict(
+    type='EpochBasedTrainLoop',
+    max_epochs=36,
+    val_interval=36,
+    )
