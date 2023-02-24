@@ -1,5 +1,5 @@
 # The new config inherits a base config to highlight the necessary modification
-_base_ = 'rtmdet/rtmdet-ins_m_8xb32-300e_coco.py'
+_base_ = '../rtmdet/rtmdet-ins_m_8xb32-300e_coco.py'
 
 # We also need to change the num_classes in head to match the dataset's annotation
 model = dict(
