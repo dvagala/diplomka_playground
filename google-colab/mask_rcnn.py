@@ -1,5 +1,5 @@
 # The new config inherits a base config to highlight the necessary modification
-_base_ = './mask_rcnn/mask_rcnn_r50_caffe_fpn_mstrain-poly_3x_coco.py'
+_base_ = './mask_rcnn/mask-rcnn_r50-caffe_fpn_ms-poly-3x_coco.py'
 
 # We also need to change the num_classes in head to match the dataset's annotation
 model = dict(
