@@ -45,3 +45,7 @@ train_cfg = dict(
     max_epochs=36,
     val_interval=36,
     )
+
+optim_wrapper = dict(
+        optimizer = dict(lr=0.02 / 8)
+    )
