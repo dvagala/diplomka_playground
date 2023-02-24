@@ -1,6 +1,7 @@
 # The new config inherits a base config to highlight the necessary modification
 _base_ = './mask_rcnn/mask-rcnn_r50-caffe_fpn_ms-poly-3x_coco.py'
 
+
 # We also need to change the num_classes in head to match the dataset's annotation
 model = dict(
     roi_head=dict(
@@ -40,7 +41,7 @@ test_evaluator = val_evaluator
 load_from = 'https://download.openmmlab.com/mmdetection/v2.0/mask_rcnn/mask_rcnn_r50_caffe_fpn_mstrain-poly_3x_coco/mask_rcnn_r50_caffe_fpn_mstrain-poly_3x_coco_bbox_mAP-0.408__segm_mAP-0.37_20200504_163245-42aa3d00.pth'
 
 train_cfg = dict(
-    type='EpochBasedRunner',
+    type='EpochBasedTrainLoop',
     max_epochs=36,
     val_interval=36,
     )
