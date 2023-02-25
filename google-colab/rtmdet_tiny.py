@@ -34,7 +34,8 @@ val_evaluator = dict(ann_file=data_root + 'valid/_annotations.coco.json')
 test_evaluator = val_evaluator
 
 # We can use the pre-trained Mask RCNN model to obtain higher performance
-load_from = 'https://download.openmmlab.com/mmdetection/v3.0/rtmdet/rtmdet_tiny_8xb32-300e_coco/rtmdet_tiny_8xb32-300e_coco_20220902_112414-78e30dcc.pth'
+load_from = 'https://download.openmmlab.com/mmdetection/v3.0/rtmdet/rtmdet-ins_tiny_8xb32-300e_coco/rtmdet-ins_tiny_8xb32-300e_coco_20221130_151727-ec670f7e.pth'
+             
 
 train_cfg = dict(
     type='EpochBasedTrainLoop',
