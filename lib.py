@@ -7,22 +7,73 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider, Button, RadioButtons
 import random
+from sklearn.cluster import MeanShift, estimate_bandwidth
+import itertools
 
-def generate_unique_colors(W,H):
+
+def do_meanshift(img, band):
+    # filter to reduce noise
+    img = cv2.medianBlur(img, 3)
+
+    # flatten the image
+    flat_image = img.reshape((-1, 3))
+    flat_image = np.float32(flat_image)
+
+    # meanshift
+    bandwidth = estimate_bandwidth(flat_image, quantile=.06, n_samples=3000)
+    ms = MeanShift(bandwidth=bandwidth, max_iter=10, bin_seeding=True)
+    ms.fit(flat_image)
+    labeled = ms.labels_
+
+    # get number of segments
+    segments = np.unique(labeled)
+    print('Number of segments: ', segments.shape[0])
+
+    # get the average color of each segment
+    total = np.zeros((segments.shape[0], 3), dtype=float)
+    count = np.zeros(total.shape, dtype=float)
+    for i, label in enumerate(labeled):
+        total[label] = total[label] + flat_image[i]
+        count[label] += 1
+    avg = total / count
+    avg = np.uint8(avg)
+
+    # cast the labeled image into the corresponding average color
+    res = avg[labeled]
+    return res.reshape((img.shape))
+
+
+def posterize(img, n):
+    indices = np.arange(0, 256)   # List of all colors
+
+    divider = np.linspace(0, 255, n + 1)[1]  # we get a divider
+
+    quantiz = np.int0(np.linspace(0, 255, n))  # we get quantization colors
+
+    # color levels 0,1,2..
+    color_levels = np.clip(np.int0(indices / divider), 0, n - 1)
+
+    palette = quantiz[color_levels]  # Creating the palette
+
+    im2 = palette[img]  # Applying palette on image
+
+    return cv2.convertScaleAbs(im2)  # Converting image back to uint8
+
+
+def generate_unique_colors(W, H):
     colors = []
-    for i in range(int((W*H)*2)):
-        r = random.randint(20,245)
-        g = random.randint(20,245)
-        b = random.randint(20,245)
-        colors.append([r,g,b])
-    return  list(set(tuple(sorted(sub)) for sub in colors))
+    for i in range(int((W * H) * 2)):
+        r = random.randint(20, 245)
+        g = random.randint(20, 245)
+        b = random.randint(20, 245)
+        colors.append([r, g, b])
+    return list(set(tuple(sorted(sub)) for sub in colors))
 
 
-def superpixel(img,b_slider, c_slider, misc_slider):
+def superpixel(img, b_slider, c_slider, misc_slider):
     converted_img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
 
-
-    height,width,channels = converted_img.shape
+    height, width, channels = converted_img.shape
     num_iterations = 6
     prior = 2
     double_step = False
@@ -30,21 +81,19 @@ def superpixel(img,b_slider, c_slider, misc_slider):
     num_levels = int(c_slider.val)
     num_histogram_bins = int(misc_slider.val)
 
-
     # seeds = cv2.ximgproc.createSuperpixelSEEDS(width, height, channels, num_superpixels, num_levels, prior, num_histogram_bins)
-    seeds = cv2.ximgproc.createSuperpixelSLIC(converted_img )
-    color_img = np.zeros((height,width,3), np.uint8)
+    seeds = cv2.ximgproc.createSuperpixelSLIC(converted_img)
+    color_img = np.zeros((height, width, 3), np.uint8)
     color_img[:] = (0, 0, 255)
     seeds.iterate(num_iterations)
 
     # retrieve the segmentation result
     labels = seeds.getLabels()
 
-
     # labels output: use the last x bits to determine the color
     num_label_bits = 2
-    labels &= (1<<num_label_bits)-1
-    labels *= 1<<(16-num_label_bits)
+    labels &= (1 << num_label_bits) - 1
+    labels *= 1 << (16 - num_label_bits)
 
     mask = seeds.getLabelContourMask(False)
 
@@ -52,11 +101,10 @@ def superpixel(img,b_slider, c_slider, misc_slider):
     mask_inv = cv2.bitwise_not(mask)
     result_bg = cv2.bitwise_and(img, img, mask=mask_inv)
     result_fg = cv2.bitwise_and(color_img, color_img, mask=mask)
-    return  cv2.add(result_bg, result_fg)
+    return cv2.add(result_bg, result_fg)
 
 
-
-def apply_brightness_contrast(input_img, brightness = 0, contrast = 0):
+def apply_brightness_contrast(input_img, brightness=0, contrast=0):
     if brightness != 0:
         if brightness > 0:
             shadow = brightness
@@ -64,18 +112,18 @@ def apply_brightness_contrast(input_img, brightness = 0, contrast = 0):
         else:
             shadow = 0
             highlight = 255 + brightness
-        alpha_b = (highlight - shadow)/255
+        alpha_b = (highlight - shadow) / 255
         gamma_b = shadow
-        
+
         buf = cv2.addWeighted(input_img, alpha_b, input_img, 0, gamma_b)
     else:
         buf = input_img.copy()
-    
+
     if contrast != 0:
-        f = 131*(contrast + 127)/(127*(131-contrast))
+        f = 131 * (contrast + 127) / (127 * (131 - contrast))
         alpha_c = f
-        gamma_c = 127*(1-f)
-        
+        gamma_c = 127 * (1 - f)
+
         buf = cv2.addWeighted(buf, alpha_c, buf, 0, gamma_c)
 
     return buf
@@ -86,65 +134,68 @@ def hough_lines(img, min, max, threshold, rho, minLineLenght, maxLineGap):
     # dst = cv2.Canny(img, min, max, None, 3)
 
     dst = sobel(img, min)
-    
+
     # Copy edges to the images that will display the results in BGR
     cdst = cv2.cvtColor(dst, cv2.COLOR_GRAY2BGR)
     cdstP = np.copy(cdst)
-    
-    linesP = cv2.HoughLinesP(dst, rho, np.pi / 180, int(threshold), None, minLineLenght, maxLineGap)
 
-    
+    linesP = cv2.HoughLinesP(dst, rho, np.pi / 180,
+                             int(threshold), None, minLineLenght, maxLineGap)
+
     if linesP is not None:
         for i in range(0, len(linesP)):
             l = linesP[i][0]
-            cv2.line(cdstP, (l[0], l[1]), (l[2], l[3]), (0,0,255), 1, cv2.LINE_AA)
-    
+            cv2.line(cdstP, (l[0], l[1]), (l[2], l[3]),
+                     (0, 0, 255), 1, cv2.LINE_AA)
+
     # cv2.imshow("Source", img)
     # cv2.imshow("Detected Lines (in red) - Standard Hough Line Transform", cdst)
     cv2.imshow("edges", dst)
     cv2.imshow("Detected Lines (in red) - Probabilistic Line Transform", cdstP)
-    
 
 
 def binaryThreshold(mask, thresh):
     # print("calculating thres")
-    ret, thresh = cv2.threshold(mask,thresh,255,cv2.THRESH_BINARY)
+    ret, thresh = cv2.threshold(mask, thresh, 255, cv2.THRESH_BINARY)
     return thresh
 
-def sobel(input, thresh, depth = cv2.CV_64F):
+
+def sobel(input, thresh, depth=cv2.CV_64F):
     # print("calculating sobel")
     if depth == cv2.CV_64F:
         input = cv2.cvtColor(input, cv2.COLOR_BGR2GRAY)
-    x = cv2.Sobel(input, ddepth=depth, dx=1,dy=0, ksize=3, scale=1)
-    y = cv2.Sobel(input, ddepth=depth, dx=0,dy=1, ksize=3, scale=1)
-    absx= cv2.convertScaleAbs(x)
+    x = cv2.Sobel(input, ddepth=depth, dx=1, dy=0, ksize=3, scale=1)
+    y = cv2.Sobel(input, ddepth=depth, dx=0, dy=1, ksize=3, scale=1)
+    absx = cv2.convertScaleAbs(x)
     absy = cv2.convertScaleAbs(y)
-    edge = cv2.addWeighted(absx, 0.5, absy, 0.5,0)
+    edge = cv2.addWeighted(absx, 0.5, absy, 0.5, 0)
     return binaryThreshold(edge, thresh)
 
 
 def is_black(rgb_array):
     return not np.any(rgb_array)
 
+
 def erode(input, size):
     if int(size) <= 0:
-        return input;
+        return input
 
     dilate_shape = cv2.MORPH_ELLIPSE
     element = cv2.getStructuringElement(dilate_shape, (2 * size + 1, 2 * size + 1),
-                                       (size, size))
+                                        (size, size))
     return cv2.erode(input, element)
+
 
 def dilate(edges, size):
     if int(size) <= 0:
-        return edges;
+        return edges
 
     # dilatation_size = int(size)
     # dilation_shape = cv2.MORPH_ELLIPSE
 
     dilate_shape = cv2.MORPH_ELLIPSE
     element = cv2.getStructuringElement(dilate_shape, (2 * size + 1, 2 * size + 1),
-                                       (size, size))
+                                        (size, size))
     # kernel = cv2.getStructuringElement(dilate_shape, (int(size),int(size)))
 
     # edges = cv2.morphologyEx(edges, cv2.MORPH_OPEN, kernel)
@@ -153,9 +204,11 @@ def dilate(edges, size):
 
     return cv2.dilate(edges, element)
 
+
 floodflags = 4
 floodflags |= cv2.FLOODFILL_MASK_ONLY
 floodflags |= (255 << 8)
+
 
 def fill_sobel_segments(img, sobel_thresh, min_filled_pixels_per_segment, dilate_size, skip_step, all_possible_colors):
     edges = sobel(img, sobel_thresh)
@@ -163,39 +216,41 @@ def fill_sobel_segments(img, sobel_thresh, min_filled_pixels_per_segment, dilate
     H = img.shape[0]
     W = img.shape[1]
 
-    segments_mask = np.zeros((H,W,3), np.uint8)
+    segments_mask = np.zeros((H, W, 3), np.uint8)
 
-    for y in range(0,H, skip_step):
-        for x in range(0,W, skip_step):
+    for y in range(0, H, skip_step):
+        for x in range(0, W, skip_step):
             # print(f'processing pixel: ({x},{y})')
             # print(f'all_segments_mask[y,x]: {all_segments_mask[y,x]}')
-            if edges[y, x] != 255 and is_black(segments_mask[y,x]):
-                mask = np.zeros((H+2,W+2), np.uint8)
-                cv2.floodFill(edges, mask, seedPoint=(x,y), newVal=(255,0,0), loDiff=(1,)*3, upDiff=(1,)*3, flags=floodflags)
-                mask = mask[1:1+H, 1:1+W]
-                filled_pixels_count = cv2.countNonZero(mask)  
+            if edges[y, x] != 255 and is_black(segments_mask[y, x]):
+                mask = np.zeros((H + 2, W + 2), np.uint8)
+                cv2.floodFill(edges, mask, seedPoint=(x, y), newVal=(
+                    255, 0, 0), loDiff=(1,) * 3, upDiff=(1,) * 3, flags=floodflags)
+                mask = mask[1:1 + H, 1:1 + W]
+                filled_pixels_count = cv2.countNonZero(mask)
                 if filled_pixels_count < min_filled_pixels_per_segment:
                     continue
 
                 mask = dilate(mask, int(dilate_size))
                 mask_inv = cv2.bitwise_not(mask)
 
-                solid_color_image = np.zeros((H,W,3), np.uint8)
-                solid_color_image[:,0:W] = all_possible_colors.pop()
+                solid_color_image = np.zeros((H, W, 3), np.uint8)
+                solid_color_image[:, 0:W] = all_possible_colors.pop()
 
-                new_colored_segment = cv2.bitwise_or(solid_color_image, solid_color_image, mask=mask)
-                segments_mask = add_non_black_to_image(bg_image=segments_mask, fg_image=new_colored_segment, mask=mask_inv)
+                new_colored_segment = cv2.bitwise_or(
+                    solid_color_image, solid_color_image, mask=mask)
+                segments_mask = add_non_black_to_image(
+                    bg_image=segments_mask, fg_image=new_colored_segment, mask=mask_inv)
 
     return segments_mask, all_possible_colors
 
 
-
-def add_non_black_to_image(bg_image, fg_image, mask = []):
+def add_non_black_to_image(bg_image, fg_image, mask=[]):
     if not np.any(mask):
-        mask = cv2.inRange(fg_image, np.array([0,0,0]), np.array([0,0,0]))
+        mask = cv2.inRange(fg_image, np.array([0, 0, 0]), np.array([0, 0, 0]))
 
     # remove foreground from background
-    bg_image = cv2.bitwise_and(bg_image, bg_image, mask = mask)
+    bg_image = cv2.bitwise_and(bg_image, bg_image, mask=mask)
     return cv2.add(bg_image, fg_image)
 
 
@@ -213,48 +268,55 @@ def manually_propagate(img, colored_segments):
     W = img.shape[1]
 
     img_grey = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    propagated_image = np.zeros((H,W,3), np.uint8)
+    propagated_image = np.zeros((H, W, 3), np.uint8)
     for y in range(H):
         for x in range(W):
-            segment_color = colored_segments[y,x]
+            segment_color = colored_segments[y, x]
             avg_grey = 127
-            grey_to_add = img_grey[y,x] - avg_grey
-            propagated_image[y,x] = [clamp_to_byte(segment_color[0] + grey_to_add), clamp_to_byte(segment_color[1] + grey_to_add), clamp_to_byte(segment_color[2] + grey_to_add)]
+            grey_to_add = img_grey[y, x] - avg_grey
+            propagated_image[y, x] = [clamp_to_byte(segment_color[0] + grey_to_add), clamp_to_byte(
+                segment_color[1] + grey_to_add), clamp_to_byte(segment_color[2] + grey_to_add)]
     return propagated_image
 
-def propagate_image(img, colored_segments, added_opacity = 0):
+
+def propagate_image(img, colored_segments, added_opacity=0):
     H = img.shape[0]
     W = img.shape[1]
 
-    brush_color = (0,0,255)
+    brush_color = (0, 0, 255)
 
-    solid_color_image = np.zeros((H,W,3), np.uint8)
-    solid_color_image[:,0:W] = brush_color
-    mask = cv2.inRange(colored_segments, np.array([0,0,0]), np.array([0,0,0]))
+    solid_color_image = np.zeros((H, W, 3), np.uint8)
+    solid_color_image[:, 0:W] = brush_color
+    mask = cv2.inRange(colored_segments, np.array(
+        [0, 0, 0]), np.array([0, 0, 0]))
     mask_inv = cv2.bitwise_not(mask)
-    colored_segments = cv2.bitwise_or(solid_color_image, solid_color_image, mask=mask_inv)
+    colored_segments = cv2.bitwise_or(
+        solid_color_image, solid_color_image, mask=mask_inv)
 
-    img_v,_,_ = cv2.split(cv2.cvtColor(img, cv2.COLOR_BGR2YUV))
-    colored_segments_v,u,y = cv2.split(cv2.cvtColor(colored_segments, cv2.COLOR_BGR2YUV))
+    img_v, _, _ = cv2.split(cv2.cvtColor(img, cv2.COLOR_BGR2YUV))
+    colored_segments_v, u, y = cv2.split(
+        cv2.cvtColor(colored_segments, cv2.COLOR_BGR2YUV))
 
     v = colored_segments_v + (img_v.astype(int) - 127)
     v = np.clip(v, 0, 255)
     v = v.astype(u.dtype)
 
-
     propagated_image = cv2.merge([v, u, y])
     propagated_image = cv2.cvtColor(propagated_image, cv2.COLOR_YUV2BGR)
 
-    cv2.addWeighted(propagated_image, 1 - (added_opacity/255), colored_segments, 0 + (added_opacity/255), 0.0, propagated_image);
+    cv2.addWeighted(propagated_image, 1 - (added_opacity / 255),
+                    colored_segments, 0 + (added_opacity / 255), 0.0, propagated_image)
 
     return propagated_image
 
+
 def create_final_image(img, propagated_image, selected_segments):
-    mask = cv2.inRange(selected_segments, np.array([0,0,0]), np.array([0,0,0]))
+    mask = cv2.inRange(selected_segments, np.array(
+        [0, 0, 0]), np.array([0, 0, 0]))
     mask_inv = cv2.bitwise_not(mask)
 
-    propagated_selected_segments = cv2.bitwise_and(propagated_image, propagated_image, mask = mask_inv)
+    propagated_selected_segments = cv2.bitwise_and(
+        propagated_image, propagated_image, mask=mask_inv)
 
     return add_non_black_to_image(img, propagated_selected_segments)
-
 
