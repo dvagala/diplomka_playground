@@ -14,6 +14,7 @@ from lib import *
 
 
 img = cv2.imread("photo.jpg")
+ldc_edges = cv2.imread("ldc_edges.png", cv2.IMREAD_GRAYSCALE)
 # img = cv2.GaussianBlur(img, (3,3), 0)
 # img = cv2.imread("photo_small.jpg")
 # cv2.imshow('img', img)
@@ -78,7 +79,7 @@ def draw_rectangle(mask, point):
 
 sobel_1_thresh_slider_ax = fig.add_axes([0.25, 0.65, 0.65, 0.03])
 sobel_1_thresh_slider = Slider(
-    sobel_1_thresh_slider_ax, 'Sobel 1 thresh', 0.1, 30, valinit=2)
+    sobel_1_thresh_slider_ax, 'Sobel 1 thresh', 0.1, 255, valinit=127)
 
 sobel_2_thresh_slider_ax = fig.add_axes([0.25, 0.6, 0.65, 0.03])
 sobel_2_thresh_slider = Slider(
@@ -110,7 +111,7 @@ min_area_3_slider = Slider(
     min_area_3_slider_ax, 'Min area 3', 0, 30000, valinit=(W * H) / 4104)
 
 skip_step_slider_ax = fig.add_axes([0.25, 0.2, 0.65, 0.03])
-skip_step_slider = Slider(skip_step_slider_ax, 'Skip step', 0, 30, valinit=8)
+skip_step_slider = Slider(skip_step_slider_ax, 'Skip step', 0, 80, valinit=8)
 
 # Define an action for modifying the line when any slider's value changes
 
@@ -244,17 +245,17 @@ def create_all_segments_mask():
     all_segments_mask = np.zeros((H, W, 3), np.uint8)
     all_segments_mask[:, 0:W] = colors1.pop()
 
-    segments_mask, colors = fill_sobel_segments(img, sobel_thresh=sobel_1_thresh_slider.val, min_filled_pixels_per_segment=int(
+    segments_mask, colors = fill_sobel_segments(img, edges=sobel(img, sobel_1_thresh_slider.val), min_filled_pixels_per_segment=int(
         min_area_1_slider.val), dilate_size=int(dilate_1_slider.val), skip_step=int(skip_step_slider.val), all_possible_colors=colors1)
     all_segments_mask = add_non_black_to_image(
         bg_image=all_segments_mask, fg_image=segments_mask)
 
-    segments_mask, colors = fill_sobel_segments(img, sobel_thresh=sobel_2_thresh_slider.val, min_filled_pixels_per_segment=int(
+    segments_mask, colors = fill_sobel_segments(img, edges=sobel(img, sobel_2_thresh_slider.val), min_filled_pixels_per_segment=int(
         min_area_2_slider.val), dilate_size=int(dilate_2_slider.val), skip_step=int(skip_step_slider.val), all_possible_colors=colors2)
     all_segments_mask = add_non_black_to_image(
         bg_image=all_segments_mask, fg_image=segments_mask)
 
-    segments_mask, colors = fill_sobel_segments(img, sobel_thresh=sobel_3_thresh_slider.val, min_filled_pixels_per_segment=int(
+    segments_mask, colors = fill_sobel_segments(img, edges=sobel(img, sobel_3_thresh_slider.val), min_filled_pixels_per_segment=int(
         min_area_3_slider.val), dilate_size=int(dilate_3_slider.val), skip_step=int(skip_step_slider.val), all_possible_colors=colors3)
     all_segments_mask = add_non_black_to_image(
         bg_image=all_segments_mask, fg_image=segments_mask)
@@ -265,6 +266,20 @@ def create_all_segments_mask():
     return all_segments_mask
 
 
+def create_segments_from_ldc_edges():
+    colors1, colors2, colors3 = split(all_possible_colors_orig[:])
+
+    all_segments_mask = np.zeros((H, W, 3), np.uint8)
+    all_segments_mask[:, 0:W] = colors1.pop()
+
+    _, ldc_edges_binary = cv2.threshold(ldc_edges, 161, 255, cv2.THRESH_BINARY_INV)
+    segments_mask, colors = fill_sobel_segments(img, min_filled_pixels_per_segment=0, dilate_size=1, skip_step=7, all_possible_colors=colors1, edges=ldc_edges_binary)
+
+    all_segments_mask = add_non_black_to_image(
+        bg_image=all_segments_mask, fg_image=segments_mask)
+
+    return all_segments_mask
+
 # all_segments_mask = create_all_segments_mask()
 # cv2.imshow("all_segments_mask", all_segments_mask)
 
@@ -273,11 +288,19 @@ def create_all_segments_mask():
 # edges_from_segments = cv2.cvtColor(edges_from_segments, cv2.COLOR_GRAY2BGR)
 
 
+# all_segments_mask = create_segments_from_ldc_edges()
+
 def render():
     print('rendering...')
     global all_segments_mask, img, all_possible_colors, selected_segments
 
     start = time.time()
+
+    _, ldc_edges_binary = cv2.threshold(ldc_edges, int(sobel_1_thresh_slider.val), 255, cv2.THRESH_BINARY_INV)
+    # _, ldc_edges_binary = cv2.threshold(ldc_edges, int(sobel_1_thresh_slider.val), 255, cv2.THRESH_BINARY_INV)
+    # segments_mask, colors = fill_sobel_segments(img, min_filled_pixels_per_segment=int(
+    #     min_area_1_slider.val), dilate_size=int(dilate_1_slider.val), skip_step=int(skip_step_slider.val), all_possible_colors=colors1, edges=ldc_edges_binary)
+
 
     # selected_segments = flood_fill_segmented_on_touch_points(all_segments_mask)
     # propagated_image = propagate_image(img, selected_segments, added_opacity = sobel_1_thresh_slider.val)
@@ -300,7 +323,7 @@ def render():
 
     print(f'time tooks: {int((time.time() - start)*1000)} ms')
 
-    edges = sobel(img, int(sobel_1_thresh_slider.val))
+    # edges = sobel(img, int(sobel_1_thresh_slider.val))
 
     # cv2.imshow("propagated_image", propagated_image)
 
@@ -308,7 +331,10 @@ def render():
     # cv2.imshow("final_image", final_image)
     # cv2.imshow("edges_from_segments", edges_from_segments)
 
-    cv2.imshow("sobel", edges)
+    # cv2.imshow("sobel", edges)
+    # cv2.imshow("ldc_edges", ldc_edges)
+    cv2.imshow("ldc_edges_binary", ldc_edges_binary)
+    # cv2.imshow("segments_mask", segments_mask)
     # cv2.imshow("flood fill", mask)
     # cv2.imshow("all_segments_mask", all_segments_mask)
 

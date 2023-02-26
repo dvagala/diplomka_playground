@@ -210,9 +210,7 @@ floodflags |= cv2.FLOODFILL_MASK_ONLY
 floodflags |= (255 << 8)
 
 
-def fill_sobel_segments(img, sobel_thresh, min_filled_pixels_per_segment, dilate_size, skip_step, all_possible_colors):
-    edges = sobel(img, sobel_thresh)
-
+def fill_sobel_segments(img, edges, min_filled_pixels_per_segment, dilate_size, skip_step, all_possible_colors):
     H = img.shape[0]
     W = img.shape[1]
 
