@@ -1,3 +1,35 @@
+import cv2
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from typing import Tuple
+from torch.utils.mobile_optimizer import optimize_for_mobile
+import cv2
+import numpy as np
+import os
+import torch
+
+
+image = cv2.imread('/Users/dvagala/School/LDC/data/lisbon.jpg', cv2.IMREAD_COLOR)
+image = cv2.resize(image, (512, 512))
+image = torch.from_numpy(image.copy())
+image = torch.permute(image, (2, 0, 1))
+image = image.float()
+image = image.unsqueeze(0)
+
+model = torch.jit.load('/Users/dvagala/School/LDC/checkpoints/B3_16_model_scripted.pt')
+# model = torch.jit.load('/Users/dvagala/School/LDC/checkpoints/B4_16_model_scripted.pt')
+model.eval()
+out = model(image)
+out = out[len(out)-1]
+
+tensor_out = out.squeeze()
+tensor_out = torch.sigmoid(tensor_out)
+tensor_out = torch.clamp(torch.mul(tensor_out, 255), min= 0, max= 255)
+
+
+
+
 
 import cv2
 
@@ -79,11 +111,11 @@ def draw_rectangle(mask, point):
 
 sobel_1_thresh_slider_ax = fig.add_axes([0.25, 0.65, 0.65, 0.03])
 sobel_1_thresh_slider = Slider(
-    sobel_1_thresh_slider_ax, 'Sobel 1 thresh', 0.1, 255, valinit=127)
+    sobel_1_thresh_slider_ax, 'Sobel 1 thresh', 0.0, 257, valinit=120)
 
 sobel_2_thresh_slider_ax = fig.add_axes([0.25, 0.6, 0.65, 0.03])
 sobel_2_thresh_slider = Slider(
-    sobel_2_thresh_slider_ax, 'Sobel 2 thresh', 0.1, 500, valinit=33)
+    sobel_2_thresh_slider_ax, 'Sobel 2 thresh', -1, 1, valinit=0)
 
 sobel_3_thresh_slider_ax = fig.add_axes([0.25, 0.55, 0.65, 0.03])
 sobel_3_thresh_slider = Slider(
@@ -296,7 +328,16 @@ def render():
 
     start = time.time()
 
-    _, ldc_edges_binary = cv2.threshold(ldc_edges, int(sobel_1_thresh_slider.val), 255, cv2.THRESH_BINARY_INV)
+
+    tmp_tensor_out = torch.clone(tensor_out)
+    tmp_tensor_out[tmp_tensor_out >= sobel_1_thresh_slider.val] = 255
+    tmp_tensor_out[tmp_tensor_out < sobel_1_thresh_slider.val] = 0
+    tmp_tensor_out = np.uint8(tmp_tensor_out.detach().numpy())
+    tmp_tensor_out.astype(np.uint8)
+
+    # edges = sobel(img, int(sobel_1_thresh_slider.val))
+
+    # _, ldc_edges_binary = cv2.threshold(ldc_edges, int(sobel_1_thresh_slider.val), 255, cv2.THRESH_BINARY_INV)
     # _, ldc_edges_binary = cv2.threshold(ldc_edges, int(sobel_1_thresh_slider.val), 255, cv2.THRESH_BINARY_INV)
     # segments_mask, colors = fill_sobel_segments(img, min_filled_pixels_per_segment=int(
     #     min_area_1_slider.val), dilate_size=int(dilate_1_slider.val), skip_step=int(skip_step_slider.val), all_possible_colors=colors1, edges=ldc_edges_binary)
@@ -331,9 +372,11 @@ def render():
     # cv2.imshow("final_image", final_image)
     # cv2.imshow("edges_from_segments", edges_from_segments)
 
+    cv2.imshow("img", img)
+    cv2.imshow("edges", tmp_tensor_out)
     # cv2.imshow("sobel", edges)
     # cv2.imshow("ldc_edges", ldc_edges)
-    cv2.imshow("ldc_edges_binary", ldc_edges_binary)
+    # cv2.imshow("ldc_edges_binary", ldc_edges_binary)
     # cv2.imshow("segments_mask", segments_mask)
     # cv2.imshow("flood fill", mask)
     # cv2.imshow("all_segments_mask", all_segments_mask)
