@@ -10,15 +10,23 @@ import os
 import torch
 
 
-image = cv2.imread('/Users/dvagala/School/LDC/data/lisbon.jpg', cv2.IMREAD_COLOR)
-image = cv2.resize(image, (512, 512))
+size = (512*3, 512*3)
+# image = cv2.imread('/Users/dvagala/School/LDC/data/lisbon.jpg', cv2.IMREAD_COLOR)
+
+# img = cv2.imread('/Users/dvagala/School/LDC/data/lisbon.jpg', cv2.IMREAD_COLOR)
+# img = cv2.imread('/Users/dvagala/School/LDC/data/0a304d20-82e6-11ed-bab6-e370802a6055_orig-photo.jpg', cv2.IMREAD_COLOR)
+img = cv2.imread('/Users/dvagala/School/LDC/data/0a625870-9b36-11ed-b2b4-6f2be65a6198_orig-photo.jpg', cv2.IMREAD_COLOR)
+# img = cv2.imread('/Users/dvagala/School/LDC/data/cubes.png', cv2.IMREAD_COLOR)
+
+image = cv2.resize(img, size )
 image = torch.from_numpy(image.copy())
 image = torch.permute(image, (2, 0, 1))
 image = image.float()
 image = image.unsqueeze(0)
 
-model = torch.jit.load('/Users/dvagala/School/LDC/checkpoints/B3_16_model_scripted.pt')
+# model = torch.jit.load('/Users/dvagala/School/LDC/checkpoints/B3_16_model_scripted.pt')
 # model = torch.jit.load('/Users/dvagala/School/LDC/checkpoints/B4_16_model_scripted.pt')
+model = torch.jit.load('/Users/dvagala/School/LDC/checkpoints/trained_on_BSDS_with_augmentation_16_model_scripted.pt')
 model.eval()
 out = model(image)
 out = out[len(out)-1]
@@ -45,7 +53,6 @@ import itertools
 from lib import *
 
 
-img = cv2.imread("photo.jpg")
 ldc_edges = cv2.imread("ldc_edges.png", cv2.IMREAD_GRAYSCALE)
 # img = cv2.GaussianBlur(img, (3,3), 0)
 # img = cv2.imread("photo_small.jpg")
@@ -111,7 +118,7 @@ def draw_rectangle(mask, point):
 
 sobel_1_thresh_slider_ax = fig.add_axes([0.25, 0.65, 0.65, 0.03])
 sobel_1_thresh_slider = Slider(
-    sobel_1_thresh_slider_ax, 'Sobel 1 thresh', 0.0, 257, valinit=120)
+    sobel_1_thresh_slider_ax, 'Sobel 1 thresh', 0.0, 257, valinit=130)
 
 sobel_2_thresh_slider_ax = fig.add_axes([0.25, 0.6, 0.65, 0.03])
 sobel_2_thresh_slider = Slider(
@@ -122,7 +129,7 @@ sobel_3_thresh_slider = Slider(
     sobel_3_thresh_slider_ax, 'Sobel 3 thresh', 0.1, 500, valinit=13)
 
 dilate_1_slider_ax = fig.add_axes([0.25, 0.5, 0.65, 0.03])
-dilate_1_slider = Slider(dilate_1_slider_ax, 'Dilate 1', 0.1, 20, valinit=2)
+dilate_1_slider = Slider(dilate_1_slider_ax, 'Dilate 1', 0.1, 20, valinit=5)
 
 dilate_2_slider_ax = fig.add_axes([0.25, 0.45, 0.65, 0.03])
 dilate_2_slider = Slider(dilate_2_slider_ax, 'Dilate 2', 0, 20, valinit=2)
@@ -143,7 +150,7 @@ min_area_3_slider = Slider(
     min_area_3_slider_ax, 'Min area 3', 0, 30000, valinit=(W * H) / 4104)
 
 skip_step_slider_ax = fig.add_axes([0.25, 0.2, 0.65, 0.03])
-skip_step_slider = Slider(skip_step_slider_ax, 'Skip step', 0, 80, valinit=8)
+skip_step_slider = Slider(skip_step_slider_ax, 'Skip step', 0, 80, valinit=12)
 
 # Define an action for modifying the line when any slider's value changes
 
@@ -298,14 +305,14 @@ def create_all_segments_mask():
     return all_segments_mask
 
 
-def create_segments_from_ldc_edges():
+def create_segments_from_edges(edges_binary):
     colors1, colors2, colors3 = split(all_possible_colors_orig[:])
 
     all_segments_mask = np.zeros((H, W, 3), np.uint8)
     all_segments_mask[:, 0:W] = colors1.pop()
 
-    _, ldc_edges_binary = cv2.threshold(ldc_edges, 161, 255, cv2.THRESH_BINARY_INV)
-    segments_mask, colors = fill_sobel_segments(img, min_filled_pixels_per_segment=0, dilate_size=1, skip_step=7, all_possible_colors=colors1, edges=ldc_edges_binary)
+    # _, ldc_edges_binary = cv2.threshold(edges, 161, 255, cv2.THRESH_BINARY_INV)
+    segments_mask, colors = fill_sobel_segments(img, min_filled_pixels_per_segment=0, dilate_size=1, skip_step=int(skip_step_slider.val), all_possible_colors=colors1, edges=edges_binary)
 
     all_segments_mask = add_non_black_to_image(
         bg_image=all_segments_mask, fg_image=segments_mask)
@@ -333,9 +340,30 @@ def render():
     tmp_tensor_out[tmp_tensor_out >= sobel_1_thresh_slider.val] = 255
     tmp_tensor_out[tmp_tensor_out < sobel_1_thresh_slider.val] = 0
     tmp_tensor_out = np.uint8(tmp_tensor_out.detach().numpy())
-    tmp_tensor_out.astype(np.uint8)
+    edges = tmp_tensor_out.astype(np.uint8)
+
+
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(int(dilate_1_slider.val),int(dilate_1_slider.val)))
+    edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel)
+
 
     # edges = sobel(img, int(sobel_1_thresh_slider.val))
+
+
+
+    edges = cv2.copyMakeBorder(edges, 1, 1, 1, 1, cv2.BORDER_CONSTANT, None, value = (255,255,255))
+
+    contours = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    contours = contours[0] if len(contours) == 2 else contours[1]
+    contours = sorted(contours, key=lambda x: -cv2.contourArea(x))
+    # contours = filter(lambda x: cv2.contourArea(x) >= 700, contours)
+
+    colors = all_possible_colors_orig[:]
+    all_segments_mask = np.zeros_like(img)
+    for c in contours:
+        cv2.drawContours(all_segments_mask, [c], 0, colors.pop(), -1)
+
+
 
     # _, ldc_edges_binary = cv2.threshold(ldc_edges, int(sobel_1_thresh_slider.val), 255, cv2.THRESH_BINARY_INV)
     # _, ldc_edges_binary = cv2.threshold(ldc_edges, int(sobel_1_thresh_slider.val), 255, cv2.THRESH_BINARY_INV)
@@ -373,13 +401,13 @@ def render():
     # cv2.imshow("edges_from_segments", edges_from_segments)
 
     cv2.imshow("img", img)
-    cv2.imshow("edges", tmp_tensor_out)
+    cv2.imshow("edges", edges)
     # cv2.imshow("sobel", edges)
     # cv2.imshow("ldc_edges", ldc_edges)
     # cv2.imshow("ldc_edges_binary", ldc_edges_binary)
     # cv2.imshow("segments_mask", segments_mask)
     # cv2.imshow("flood fill", mask)
-    # cv2.imshow("all_segments_mask", all_segments_mask)
+    cv2.imshow("all_segments_mask", all_segments_mask)
 
     fig.canvas.draw_idle()
     print('finish render')
