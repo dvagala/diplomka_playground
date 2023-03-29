@@ -10,14 +10,17 @@ import os
 import torch
 
 
-size = (512*3, 512*3)
+size = (512*2, 512*2)
+# size = (512, 512)
 # image = cv2.imread('/Users/dvagala/School/LDC/data/lisbon.jpg', cv2.IMREAD_COLOR)
 
-# img = cv2.imread('/Users/dvagala/School/LDC/data/lisbon.jpg', cv2.IMREAD_COLOR)
+img = cv2.imread('/Users/dvagala/School/LDC/data/lisbon.jpg', cv2.IMREAD_COLOR)
+# img = cv2.imread('/Users/dvagala/School/LDC/data/facade.jpg', cv2.IMREAD_COLOR)
 # img = cv2.imread('/Users/dvagala/School/LDC/data/0a304d20-82e6-11ed-bab6-e370802a6055_orig-photo.jpg', cv2.IMREAD_COLOR)
-img = cv2.imread('/Users/dvagala/School/LDC/data/0a625870-9b36-11ed-b2b4-6f2be65a6198_orig-photo.jpg', cv2.IMREAD_COLOR)
+# img = cv2.imread('/Users/dvagala/School/LDC/data/0a625870-9b36-11ed-b2b4-6f2be65a6198_orig-photo.jpg', cv2.IMREAD_COLOR)
 # img = cv2.imread('/Users/dvagala/School/LDC/data/cubes.png', cv2.IMREAD_COLOR)
 
+img = cv2.resize(img, size )
 image = cv2.resize(img, size )
 image = torch.from_numpy(image.copy())
 image = torch.permute(image, (2, 0, 1))
@@ -27,6 +30,10 @@ image = image.unsqueeze(0)
 # model = torch.jit.load('/Users/dvagala/School/LDC/checkpoints/B3_16_model_scripted.pt')
 # model = torch.jit.load('/Users/dvagala/School/LDC/checkpoints/B4_16_model_scripted.pt')
 model = torch.jit.load('/Users/dvagala/School/LDC/checkpoints/trained_on_BSDS_with_augmentation_16_model_scripted.pt')
+# model = torch.jit.load('/Users/dvagala/School/LDC/checkpoints/trained_on_BSDS+CROPPUI111_using_original_brind_augmentation_16_model_scripted.pt')
+# model = torch.jit.load('/Users/dvagala/School/LDC/checkpoints/trained_on_BSDS+CROPPUI111_using_my_new_augmentation90x_with_hue_augmentation_16_model_scripted.pt')
+# model = torch.jit.load('/Users/dvagala/School/LDC/checkpoints/trained_on_BSDS+CROPPUI111_using_original_brind_augmentation_16_model_scripted.pt')
+# model = torch.jit.load('/Users/dvagala/School/LDC/checkpoints/trained_on_CROPPUI111_with_my_augmentation90x_with_hue_16_model_scripted.pt')
 model.eval()
 out = model(image)
 out = out[len(out)-1]
@@ -122,17 +129,17 @@ sobel_1_thresh_slider = Slider(
 
 sobel_2_thresh_slider_ax = fig.add_axes([0.25, 0.6, 0.65, 0.03])
 sobel_2_thresh_slider = Slider(
-    sobel_2_thresh_slider_ax, 'Sobel 2 thresh', -1, 1, valinit=0)
+    sobel_2_thresh_slider_ax, 'Sobel 2 thresh', 0, 255, valinit=127)
 
 sobel_3_thresh_slider_ax = fig.add_axes([0.25, 0.55, 0.65, 0.03])
 sobel_3_thresh_slider = Slider(
     sobel_3_thresh_slider_ax, 'Sobel 3 thresh', 0.1, 500, valinit=13)
 
 dilate_1_slider_ax = fig.add_axes([0.25, 0.5, 0.65, 0.03])
-dilate_1_slider = Slider(dilate_1_slider_ax, 'Dilate 1', 0.1, 20, valinit=5)
+dilate_1_slider = Slider(dilate_1_slider_ax, 'Dilate 1', 0, 20, valinit=2)
 
 dilate_2_slider_ax = fig.add_axes([0.25, 0.45, 0.65, 0.03])
-dilate_2_slider = Slider(dilate_2_slider_ax, 'Dilate 2', 0, 20, valinit=2)
+dilate_2_slider = Slider(dilate_2_slider_ax, 'Dilate 2', 0, 15, valinit=3)
 
 dilate_3_slider_ax = fig.add_axes([0.25, 0.4, 0.65, 0.03])
 dilate_3_slider = Slider(dilate_3_slider_ax, 'Dilate 3', 0, 20, valinit=2)
@@ -352,18 +359,78 @@ def render():
 
 
     edges = cv2.copyMakeBorder(edges, 1, 1, 1, 1, cv2.BORDER_CONSTANT, None, value = (255,255,255))
+    # edges = cv2.bitwise_not(edges)
 
-    contours = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-    contours = contours[0] if len(contours) == 2 else contours[1]
+    contours, hierarchy = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    # contours, hierarchy = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    # contours, hiere = cv2.findContours(edges.astype(np.int32), cv2.RETR_FLOODFILL, cv2.CHAIN_APPROX_SIMPLE)
+    # contours = contours[0] if len(contours) == 2 else contours[1]
     contours = sorted(contours, key=lambda x: -cv2.contourArea(x))
-    # contours = filter(lambda x: cv2.contourArea(x) >= 700, contours)
+    contours = filter(lambda x: cv2.contourArea(x) >= 20, contours)
+    print(f'first pixel: {edges[1,1]}')
 
     colors = all_possible_colors_orig[:]
-    all_segments_mask = np.zeros_like(img)
-    for c in contours:
-        cv2.drawContours(all_segments_mask, [c], 0, colors.pop(), -1)
+
+    rgb_edges = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
+    all_segments_mask = np.zeros_like(rgb_edges)
+    # print(hierarchy)
+
+    kernel_el = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(int(dilate_2_slider.val),int(dilate_2_slider.val)))
+
+    for (i, c) in enumerate(contours):
+        # print(hierarchy[0][i])
+        # if hierarchy[0][i][3] == -1:
+
+        # c = contours[198]
+        # c = contours[int(dilate_3_slider.val)]
+
+        leftmost = tuple(c[c[:,:,0].argmin()][0])
+        rightmost = tuple(c[c[:,:,0].argmax()][0])
+        topmost = tuple(c[c[:,:,1].argmin()][0])
+        bottommost = tuple(c[c[:,:,1].argmax()][0])
+
+        print(f'i: {i}')
+        print(f'leftmost: {leftmost[0]} {leftmost[1]}')
+        print(f'rightmost: {rightmost[0]} {rightmost[1]}')
+        print(f'topmost: {topmost[0]} {topmost[1]}')
+        print(f'bottommost: {bottommost[0]} {bottommost[1]}')
+
+        # print('---')
+        left = edges[leftmost[1], leftmost[0]+1]
+        right = edges[rightmost[1], rightmost[0]-1]
+        top = edges[topmost[1]+1, topmost[0]]
+        bottom = edges[bottommost[1]-1, bottommost[0]]
+        print(left)
+        print(right)
+        print(top)
+        print(bottom)
+
+        # if left == 255 and right == 255 and top == 255 and bottom == 255:
+        #     pass
+        # else:
+        # cv2.drawContours(all_segments_mask, [c], 0, colors.pop(), -1)
+        if left == 0 and right == 0 and top == 0 and bottom == 0:
+            one_contour_drawn = np.zeros_like(rgb_edges)
+            cv2.drawContours(one_contour_drawn, [c], -1, colors.pop(), -1)
+            one_contour_drawn = cv2.dilate(one_contour_drawn, kernel_el)
+            # all_segments_mask =  cv2.add(all_segments_mask, one_contour_drawn)
+            all_segments_mask = add_non_black_to_image(all_segments_mask, one_contour_drawn)
+
+    # all_segments_mask = cv2.dilate(all_segments_mask, kernel_el, borderType=cv2.BORDER_REPLICATE)
+    # all_segments_mask = add_non_black_to_image(all_segments_mask, one_contour_drawn)
+
+        # break
+
+    # edges = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
+    # all_segments_mask = add_non_black_to_image(rgb_edges, all_segments_mask)
+        # else:
+        #     print('skipping')
 
 
+
+    # mask_inv = cv2.inRange(edges, np.array([0, 0, 0]), np.array([0, 0, 0]))
+    # mask_inv = cv2.bitwise_not(edges)
+    # all_segments_mask = cv2.bitwise_and(all_segments_mask, all_segments_mask, mask=mask_inv)
 
     # _, ldc_edges_binary = cv2.threshold(ldc_edges, int(sobel_1_thresh_slider.val), 255, cv2.THRESH_BINARY_INV)
     # _, ldc_edges_binary = cv2.threshold(ldc_edges, int(sobel_1_thresh_slider.val), 255, cv2.THRESH_BINARY_INV)
@@ -372,8 +439,11 @@ def render():
 
 
     # selected_segments = flood_fill_segmented_on_touch_points(all_segments_mask)
-    # propagated_image = propagate_image(img, selected_segments, added_opacity = sobel_1_thresh_slider.val)
+    # propagated_image = propagate_image(img, selected_segments, added_opacity = sobel_2_thresh_slider.val)
+    all_segments_mask = all_segments_mask[1:1+size[1], 1:1+size[0]]
+    propagated_image = propagate_image(img, all_segments_mask, added_opacity = 127)
     # final_image = create_final_image(img, propagated_image, selected_segments)
+    final_image = create_final_image(img, propagated_image, all_segments_mask)
 
     # # if l_mouse_is_pressed:
     # #     final_image = add_non_black_to_image(final_image, edges_from_segments)
@@ -397,7 +467,7 @@ def render():
     # cv2.imshow("propagated_image", propagated_image)
 
     # cv2.imshow("selected_segments", selected_segments)
-    # cv2.imshow("final_image", final_image)
+    cv2.imshow("final_image", final_image)
     # cv2.imshow("edges_from_segments", edges_from_segments)
 
     cv2.imshow("img", img)

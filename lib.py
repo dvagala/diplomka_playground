@@ -283,8 +283,9 @@ def propagate_image(img, colored_segments, added_opacity=0):
 
     brush_color = (0, 0, 255)
 
-    solid_color_image = np.zeros((H, W, 3), np.uint8)
-    solid_color_image[:, 0:W] = brush_color
+    # solid_color_image = np.zeros((H, W, 3), np.uint8)
+    solid_color_image = colored_segments
+    # solid_color_image[:, 0:W] = brush_color
     mask = cv2.inRange(colored_segments, np.array(
         [0, 0, 0]), np.array([0, 0, 0]))
     mask_inv = cv2.bitwise_not(mask)
