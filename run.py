@@ -8,9 +8,6 @@ import cv2
 import numpy as np
 import os
 import torch
-from colormath.color_objects import sRGBColor, LabColor
-from colormath.color_conversions import convert_color
-from colormath.color_diff import delta_e_cie2000
 
 
 size = (512*2, 512*2)
@@ -145,7 +142,7 @@ dilate_2_slider_ax = fig.add_axes([0.25, 0.45, 0.65, 0.03])
 dilate_2_slider = Slider(dilate_2_slider_ax, 'Dilate 2', 0, 15, valinit=3)
 
 dilate_3_slider_ax = fig.add_axes([0.25, 0.4, 0.65, 0.03])
-dilate_3_slider = Slider(dilate_3_slider_ax, 'Dilate 3', 0, 20, valinit=5)
+dilate_3_slider = Slider(dilate_3_slider_ax, 'Dilate 3', 0, 20, valinit=2)
 
 min_area_1_slider_ax = fig.add_axes([0.25, 0.35, 0.65, 0.03])
 min_area_1_slider = Slider(
@@ -380,8 +377,6 @@ def render():
 
     kernel_el = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(int(dilate_2_slider.val),int(dilate_2_slider.val)))
 
-    used_colors = []
-
     for (i, c) in enumerate(contours):
         # print(hierarchy[0][i])
         # if hierarchy[0][i][3] == -1:
@@ -415,56 +410,11 @@ def render():
         # else:
         # cv2.drawContours(all_segments_mask, [c], 0, colors.pop(), -1)
         if left == 0 and right == 0 and top == 0 and bottom == 0:
-            # one_contour_drawn = np.zeros_like(rgb_edges)
-            color = colors.pop()
-            used_colors.append(color)
-            cv2.drawContours(all_segments_mask, [c], -1, color, -1)
-            # cv2.drawContours(one_contour_drawn, [c], -1, colors.pop(), -1)
-            # one_contour_drawn = cv2.dilate(one_contour_drawn, kernel_el)
+            one_contour_drawn = np.zeros_like(rgb_edges)
+            cv2.drawContours(one_contour_drawn, [c], -1, colors.pop(), -1)
+            one_contour_drawn = cv2.dilate(one_contour_drawn, kernel_el)
             # all_segments_mask =  cv2.add(all_segments_mask, one_contour_drawn)
-            # all_segments_mask = add_non_black_to_image(all_segments_mask, one_contour_drawn)
-
-    all_segments_mask = add_non_black_to_image(all_segments_mask, rgb_edges)
-
-    new_contours = np.zeros_like(all_segments_mask)
-
-    img_with_border = cv2.copyMakeBorder(img, 1, 1, 1, 1, cv2.BORDER_CONSTANT, None, value = (255,255,255))
-
-    masks = []
-    means = []
-    # (148, 158, 164)
-
-
-
-
-
-    for (i, color) in enumerate(used_colors):
-
-        mask = cv2.inRange(all_segments_mask, np.array(color), np.array(color))
-
-        contours, hierarchy = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-
-
-        mask_white = np.zeros_like(edges)
-        cv2.drawContours(mask_white, contours, -1, 255, -1)
-        mean = cv2.mean(img_with_border, mask=mask_white)
-
-
-        color2_rgb = sRGBColor(mean[2], mean[1], mean[0], is_upscaled=True)
-        color2_lab = convert_color(color2_rgb, LabColor)
-
-        if i == 0:
-            color1_lab = color2_lab 
-
-        delta_e = delta_e_cie2000(color1_lab, color2_lab)
-
-        if delta_e  < dilate_3_slider.val:
-            cv2.drawContours(new_contours, contours, -1, color, -1)
-
-        print(delta_e)
-
-    cv2.imshow("new_contours", new_contours)
-        
+            all_segments_mask = add_non_black_to_image(all_segments_mask, one_contour_drawn)
 
     # all_segments_mask = cv2.dilate(all_segments_mask, kernel_el, borderType=cv2.BORDER_REPLICATE)
     # all_segments_mask = add_non_black_to_image(all_segments_mask, one_contour_drawn)
@@ -491,7 +441,6 @@ def render():
     # selected_segments = flood_fill_segmented_on_touch_points(all_segments_mask)
     # propagated_image = propagate_image(img, selected_segments, added_opacity = sobel_2_thresh_slider.val)
     all_segments_mask = all_segments_mask[1:1+size[1], 1:1+size[0]]
-
     propagated_image = propagate_image(img, all_segments_mask, added_opacity = 127)
     # final_image = create_final_image(img, propagated_image, selected_segments)
     final_image = create_final_image(img, propagated_image, all_segments_mask)
@@ -518,7 +467,7 @@ def render():
     # cv2.imshow("propagated_image", propagated_image)
 
     # cv2.imshow("selected_segments", selected_segments)
-    # cv2.imshow("final_image", final_image)
+    cv2.imshow("final_image", final_image)
     # cv2.imshow("edges_from_segments", edges_from_segments)
 
     cv2.imshow("img", img)
